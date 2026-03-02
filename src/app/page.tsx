@@ -135,8 +135,7 @@ function HeroSection() {
             <span className="animate-blink text-primary">_</span>
           </h1>
           <p className="text-base md:text-lg text-gray-500 font-mono">
-            AI/ML &amp; Data Engineer. Building intelligent agents that remember
-            and reason.
+            Architecting AI Agents and Machine Learning Solutions for Quantitative Trading and Financial Markets
           </p>
         </div>
 
@@ -174,16 +173,24 @@ function AboutSection() {
           <p className="text-gray-300 leading-relaxed font-mono text-xs md:text-sm">
             <span className="text-primary">&gt;</span> AI/ML Engineer
             passionate about building intelligent systems. Currently working on
-            multi-agent workflows and building{" "}
-            <span className="text-primary/90 underline decoration-primary/40 decoration-1 underline-offset-4">
-              ContextMemory
-            </span>
-            , a memory system for AI applications.
+             {" "}
+            <a
+              href="https://github.com/Skywalker1080/manasCore.git"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:opacity-80 transition-opacity"
+            >
+              <span className="text-primary/90 underline decoration-primary/40 decoration-1 underline-offset-4">
+                manasCore
+              </span>
+            </a>
+            , an local first AI Journaling Toolkit
           </p>
           <p className="text-gray-400 leading-relaxed font-mono text-xs md:text-sm">
-            <span className="text-primary">&gt;</span> Specialized in Machine
-            Learning, Deep Learning, NLP, and backend development with Python
-            and FastAPI.
+            <span className="text-primary">&gt;</span> I Specialized in Leveraging Deep Learning and NLP to develop sophisticated forecasting models for financial market trends and risk assessment.
+          </p>
+          <p className="text-gray-400 leading-relaxed font-mono text-xs md:text-sm">
+            <span className="text-primary">&gt;</span> Expert in building robust, scalable backends using Python and FastAPI to deploy predictive models that drive quantitative insights and market analysis.
           </p>
         </div>
 

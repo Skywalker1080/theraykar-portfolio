@@ -8,17 +8,54 @@ import { useState, useEffect } from "react";
    ════════════════════════════════════════════════════════════════ */
 
 const SKILLS = [
+  // Core Programming
+  "Python",
+  "C++",
+  "JavaScript",
+  "Bash/Linux",
+  "SQL",
+
+  // Machine Learning & AI
   "Machine Learning",
   "Deep Learning",
   "PyTorch",
+  "Scikit-Learn",
+  "Keras",
   "Agentic AI",
   "Multi-agent Workflows",
-  "Langchain",
+
+  // LLM & RAG Ecosystem
+  "LangChain",
   "LangGraph",
+  "HuggingFace",
+  "RAG Systems",
   "Pydantic AI",
+
+  // Data & Scientific Computing
+  "NumPy",
+  "Pandas",
+  "Matplotlib",
+
+  // Backend & APIs
   "FastAPI",
-  "RAGs",
-  "Memory Systems",
+
+  // MLOps & Infrastructure
+  "MLflow",
+  "Docker",
+  "Google Cloud",
+
+  // Databases & Caching
+  "MongoDB",
+  "Redis",
+
+  // Tooling
+  "Git",
+  "Claude Code",
+
+  //Misc
+  "Forecasting",
+  "Backtesting",
+
 ];
 
 const EXPERIENCE = [
@@ -43,6 +80,47 @@ const EXPERIENCE = [
       "Integrated vector databases for semantic search.",
     ],
   },
+];
+
+const PROJECTS = [
+  {
+    title: "Crypto Prism",
+    description: "Automated crypto trading system using Reinforcement Learning and Sentiment Analysis from real-time X (Twitter) feeds. Achieved 12% alpha over BTC benchmark in simulation.",
+    tags: ["Python", "PyTorch", "Redis", "FastAPI"],
+    link: "#",
+    image: "https://images.unsplash.com/photo-1611974714022-de8fc8494b5f?q=80&w=800&auto=format&fit=crop"
+  },
+  {
+    title: "MANAS CORE",
+    description: "Local-first AI Journaling App with RAG engine. Features vector-based semantic search and automated daily summaries and visualizations using local LLMs.",
+    tags: ["Next.js", "TypeScript", "Ollama", "SQLite-Vector"],
+    link: "https://github.com/Skywalker1080/manasCore.git",
+    image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop"
+  },
+  {
+    title: "ALPHA STREAM",
+    description: "An Agentic, Crypto Forecasting System powered by Google's 500M Forecasting Model, with complete MLOps",
+    tags: ["Python", "Forecasting", "Quant Finance", "MLOps", "Pytorch"],
+    link: "#",
+    image: "https://images.unsplash.com/photo-1551288049-bbbda536339a?q=80&w=800&auto=format&fit=crop"
+  },
+  {
+    title: "VECTOR",
+    description: "An End to End AI Agent for controlling a Robotic Manipulator in an unstructured environment.",
+    tags: ["Agentic AI", "Python", "Gemini", "ROS2"],
+    link: "#",
+    image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?q=80&w=800&auto=format&fit=crop"
+  }
+];
+
+const EDUCATION = [
+  {
+    institution: "SAVITRIBAI PHULE PUNE UNIVERSITY",
+    degree: "B.E in Automation and robotics",
+    period: "2022 — 2026",
+    logo: "/sppu.png",
+    details: "CGPA: 8.5/10. Relevant coursework: Data Structures and Algorithms, Machine Learning, AI for Robotics, Optimization Techniques."
+  }
 ];
 
 /* ════════════════════════════════════════════════════════════════
@@ -272,11 +350,70 @@ function ExperienceSection() {
   );
 }
 
+function ProjectsSection() {
+  return (
+    <section id="projects" className="mb-10 space-y-4">
+      <h2 className="text-[13px] leading-[18px] text-primary font-normal tracking-[0.3em] font-mono border-b border-primary/20 pb-2 flex items-center gap-3 uppercase">
+        <span className="opacity-70">03.</span> FEATURED_PROJECTS
+      </h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {PROJECTS.map((project, idx) => (
+          <a 
+            key={idx} 
+            href={project.link} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="terminal-container group cursor-pointer overflow-hidden border-glow block"
+          >
+            <div className="relative h-40 overflow-hidden border-b border-primary/10">
+              <div className="absolute inset-0 bg-primary/20 group-hover:bg-transparent transition-colors z-10 pointer-events-none mix-blend-overlay" />
+              <img
+                src={project.image}
+                alt={project.title}
+                className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 scale-105 group-hover:scale-100"
+              />
+              <div className="absolute top-2 right-2 z-20">
+                <div className="bg-black/80 px-2 py-1 border border-primary/30 text-[8px] font-mono text-primary/80 uppercase">
+                  v{idx + 1}.0.2
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              <div className="flex justify-between items-start">
+                <h3 className="text-sm font-display text-white group-hover:text-primary transition-colors text-glow uppercase tracking-wider">
+                  {project.title}
+                </h3>
+                <span className="text-primary text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+                  [VIEW_SRC]
+                </span>
+              </div>
+              
+              <p className="text-[11px] leading-relaxed text-gray-400 font-mono h-12 overflow-hidden">
+                {project.description}
+              </p>
+              
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {project.tags.map(tag => (
+                  <span key={tag} className="text-[9px] font-mono border border-primary/20 px-1.5 py-0.5 rounded text-primary/60 bg-primary/5 group-hover:border-primary/50 transition-colors">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SkillsSection() {
   return (
     <section id="skills" className="mb-10">
       <h2 className="text-[13px] leading-[18px] text-primary font-normal tracking-[0.3em] font-mono border-b border-primary/20 pb-2 flex items-center gap-3 mb-4 uppercase">
-        <span className="opacity-70">03.</span> SKILLS_SET
+        <span className="opacity-70">04.</span> SKILLS_SET
       </h2>
 
       <div className="flex flex-wrap gap-2">
@@ -285,6 +422,141 @@ function SkillsSection() {
             {skill}
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function EducationSection() {
+  return (
+    <section id="education" className="mb-10 space-y-4">
+      <h2 className="text-[13px] leading-[18px] text-primary font-normal tracking-[0.3em] font-mono border-b border-primary/20 pb-2 flex items-center gap-3 uppercase">
+        <span className="opacity-70">05.</span> ACADEMIC_RECORD
+      </h2>
+      
+      <div className="space-y-3">
+        {EDUCATION.map((edu, idx) => (
+          <div key={idx} className="experience-card group">
+            {/* Logo Container */}
+            <div className="shrink-0 hidden sm:block">
+              <div className="w-10 h-10 bg-black rounded flex items-center justify-center overflow-hidden border border-white/10">
+                <Image
+                  src={edu.logo}
+                  alt={`${edu.institution} Logo`}
+                  width={28}
+                  height={28}
+                  className="object-contain transition-opacity group-hover:scale-110 duration-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-1">
+                <h3 className="text-base font-bold text-white exp-title transition-colors">
+                  {edu.institution}
+                </h3>
+                <span className="text-[10px] leading-[18px] font-normal text-gray-600 font-mono exp-period transition-colors">
+                  [ {edu.period} ]
+                </span>
+              </div>
+              <p className="text-primary/70 text-[10px] leading-[18px] font-normal uppercase tracking-widest mb-2">
+                {edu.degree}
+              </p>
+              <p className="text-xs text-gray-400 font-mono leading-relaxed">
+                <span className="text-primary mr-2">→</span> {edu.details}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ContactSection() {
+  const contacts = [
+    { 
+      label: "EMAIL", 
+      value: "pranav.darekar1080@gmail.com", 
+      link: "mailto:pranav.darekar1080@gmail.com",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><rect width="20" height="16" x="2" y="4" rx="2"/></svg>
+      )
+    },
+    { 
+      label: "GITHUB", 
+      value: "github.com/Skywalker1080", 
+      link: "https://github.com/Skywalker1080",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+      )
+    },
+    { 
+      label: "LINKEDIN", 
+      value: "linkedin.com/in/pranav-darekar", 
+      link: "https://linkedin.com/in/pranav-darekar",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+      )
+    },
+    { 
+      label: "TWITTER / X", 
+      value: "@the_ray_kar", 
+      link: "https://x.com/the_ray_kar",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l11.733 16h4.267l-11.733 -16z"/><path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772"/></svg>
+      )
+    },
+  ];
+
+  return (
+    <section id="contact" className="mb-20 pt-10 border-t border-primary/10">
+      <div className="flex flex-col lg:flex-row gap-12 items-start justify-between">
+        {/* Left Column */}
+        <div className="flex-1 space-y-8 max-w-xl">
+          
+          
+          <div className="space-y-4">
+            <h2 className="text-4xl md:text-5xl font-display text-white uppercase leading-tight text-glow">
+              Let&apos;s build<br />the <span className="text-primary">Matrix</span> together
+            </h2>
+            <p className="text-gray-500 font-mono text-xs md:text-sm leading-relaxed max-w-md">
+              Curruntly open to work Remotely on AI Systems, Fintech, Crypto, Data Infrastructure, and Developer Tools.
+            </p>
+          </div>
+
+          <div className="pt-4">
+            <a href="mailto:pranav.darekar1080@gmail.com" className="cta-primary flex items-center gap-3 w-max px-8">
+              send_message
+              <span className="text-lg">→</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="flex-1 w-full space-y-3">
+          {contacts.map((contact) => (
+            <a
+              key={contact.label}
+              href={contact.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-5 p-5 terminal-container hover:bg-primary/5 hover:border-primary/40 transition-all duration-300 group border-glow"
+            >
+              <div className="text-gray-600 group-hover:text-primary transition-colors duration-300">
+                {contact.icon}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] text-gray-600 font-mono uppercase tracking-[0.2em] group-hover:text-primary/70 transition-colors">
+                  {contact.label}
+                </span>
+                <span className="text-sm text-gray-300 font-mono group-hover:text-white transition-colors">
+                  {contact.value}
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -336,7 +608,10 @@ export default function Home() {
         <HeroSection />
         <AboutSection />
         <ExperienceSection />
+        <ProjectsSection />
         <SkillsSection />
+        <EducationSection />
+        <ContactSection />
         <Footer />
       </main>
 

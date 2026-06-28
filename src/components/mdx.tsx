@@ -39,7 +39,8 @@ export const mdxComponents = {
       alt={alt ?? ""}
       width={1200}
       height={630}
-      className="rounded-md border border-white/10 my-6 w-full h-auto"
+      sizes="(max-width: 768px) 100vw, 768px"
+      className="rounded-md border border-white/10 my-6 w-full h-auto object-contain"
     />
   ),
 };

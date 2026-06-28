@@ -39,7 +39,8 @@ export default function BlogIndexPage() {
                   alt={post.title}
                   width={1200}
                   height={630}
-                  className="rounded-md border border-white/10 mb-4 w-full h-auto"
+                  sizes="(max-width: 768px) 100vw, 768px"
+                  className="rounded-md border border-white/10 mb-4 w-full h-48 object-cover"
                 />
               )}
               <time className="font-mono text-xs text-gray-500">{post.date}</time>

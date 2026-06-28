@@ -1,0 +1,40 @@
+---
+title: "Hello, Blog"
+date: "2026-06-28"
+description: "First post — a quick tour of images, links, LaTeX, and code rendering."
+cover: "/cp-website.png"
+---
+
+Welcome to the blog. This first post is a working reference for everything the
+blog can render — copy its patterns when you write the next one.
+
+## Images
+
+![CryptoPrism website screenshot](/cp-website.png)
+
+Drop post-specific images in `public/blog/<slug>/` and reference them by path.
+
+## Links
+
+You can [link out to anything](https://nextjs.org), and because this is MDX you
+can also embed raw HTML/JSX when you need to.
+
+## Math (LaTeX)
+
+Inline math like $E = mc^2$ works, and so do display blocks:
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
+## Code
+
+```python
+def fib(n: int) -> int:
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+```
+
+That's the whole toolkit: images, links, math, and code.

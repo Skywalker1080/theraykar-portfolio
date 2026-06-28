@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 
 /* ════════════════════════════════════════════════════════════════
@@ -152,7 +153,7 @@ function StatusBar() {
           <span className="sm:hidden">SYS_ON</span>
         </span>
         <div className="flex gap-3 md:gap-5 border-l border-primary/30 pl-3 md:pl-5 ml-1 md:ml-3">
-          <a className="hover:text-primary transition-colors" href="/blog">BLOG</a>
+          <Link className="hover:text-primary transition-colors" href="/blog">BLOG</Link>
           <a className="hover:text-primary transition-colors" href="#">GITHUB</a>
           <a className="hover:text-primary transition-colors" href="#">LINKEDIN</a>
           <a className="hover:text-primary transition-colors" href="#">TWITTER</a>

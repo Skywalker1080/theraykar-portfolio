@@ -20,7 +20,7 @@ export default function BlogIndexPage() {
 
       <h1 className="font-display text-3xl text-primary text-glow mt-6 mb-2">BLOG</h1>
       <p className="text-gray-500 mb-10 font-mono text-sm">
-        // thoughts, notes, and experiments
+        {"// thoughts, notes, and experiments"}
       </p>
 
       {posts.length === 0 ? (

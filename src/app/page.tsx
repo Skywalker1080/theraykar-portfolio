@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import MatrixRain from "@/components/matrix-rain";
 
 /* ════════════════════════════════════════════════════════════════
    DATA
@@ -598,6 +599,9 @@ function Footer() {
 export default function Home() {
   return (
     <>
+      {/* Matrix digital rain background */}
+      <MatrixRain />
+
       {/* CRT Scanlines */}
       <div className="scanlines opacity-30" />
 

@@ -35,18 +35,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Scrollbar ────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 8px;
+/* ─── Scrollbar — hidden everywhere (scrolling still works) ─── */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / old Edge */
 }
-::-webkit-scrollbar-track {
-  background: #000;
-}
-::-webkit-scrollbar-thumb {
-  background: #4ade80;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #22c55e;
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge, and all scroll containers */
 }
 
 /* ─── CRT Scanlines Overlay ────────────────────────────────── */

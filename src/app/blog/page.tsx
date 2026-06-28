@@ -18,20 +18,17 @@ export default function BlogIndexPage() {
         ← back to home
       </Link>
 
-      <h1 className="font-display text-3xl text-primary text-glow mt-6 mb-2">BLOG</h1>
-      <p className="text-gray-500 mb-10 font-mono text-sm">
-        {"// thoughts, notes, and experiments"}
-      </p>
+      <h1 className="font-display text-3xl text-primary text-glow mt-6 mb-10">BLOG</h1>
 
       {posts.length === 0 ? (
         <p className="text-gray-500 font-mono text-sm">No posts yet.</p>
       ) : (
-        <div className="space-y-6">
+        <div className="divide-y divide-white/10">
           {posts.map((post) => (
             <Link
               key={post.slug}
               href={`/blog/${post.slug}` as Route}
-              className="block terminal-container rounded-md p-5 group"
+              className="block group py-8"
             >
               {post.cover && (
                 <Image

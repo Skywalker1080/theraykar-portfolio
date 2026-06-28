@@ -152,6 +152,7 @@ function StatusBar() {
           <span className="sm:hidden">SYS_ON</span>
         </span>
         <div className="flex gap-3 md:gap-5 border-l border-primary/30 pl-3 md:pl-5 ml-1 md:ml-3">
+          <a className="hover:text-primary transition-colors" href="/blog">BLOG</a>
           <a className="hover:text-primary transition-colors" href="#">GITHUB</a>
           <a className="hover:text-primary transition-colors" href="#">LINKEDIN</a>
           <a className="hover:text-primary transition-colors" href="#">TWITTER</a>

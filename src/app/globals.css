@@ -278,3 +278,34 @@ body {
 .terminal-container:hover .terminal-dot.green {
   background: #22c55e;
 }
+
+/* ─── Blog: code blocks (rehype-pretty-code) ──────────────── */
+.blog-prose [data-rehype-pretty-code-figure] pre {
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1.25rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.blog-prose [data-rehype-pretty-code-figure] code {
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* ─── Blog: inline code ───────────────────────────────────── */
+.blog-prose :not(pre) > code {
+  background: #0a0a0a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85em;
+  color: #4ade80;
+}
+
+/* ─── Blog: KaTeX display math overflow ───────────────────── */
+.blog-prose .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+}

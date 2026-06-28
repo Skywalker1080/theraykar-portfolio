@@ -40,7 +40,7 @@ export default function BlogIndexPage() {
                   width={1200}
                   height={630}
                   sizes="(max-width: 768px) 100vw, 768px"
-                  className="rounded-md border border-white/10 mb-4 w-full h-48 object-cover"
+                  className="rounded-md border border-white/10 mb-4 w-full aspect-[5/2] object-cover"
                 />
               )}
               <time className="font-mono text-xs text-gray-500">{post.date}</time>

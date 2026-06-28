@@ -85,10 +85,10 @@ const EXPERIENCE = [
 const PROJECTS = [
   {
     title: "Crypto Prism",
-    description: "Automated crypto trading system using Reinforcement Learning and Sentiment Analysis from real-time X (Twitter) feeds. Achieved 12% alpha over BTC benchmark in simulation.",
+    description: "Production-Grade Cryptocurrency Technical Analysis System and data pipeline featuring multi-layered technical analysis, automated quality assurance, and sophisticated backtesting capabilities",
     tags: ["Python", "PyTorch", "Redis", "FastAPI"],
-    link: "#",
-    image: "https://images.unsplash.com/photo-1611974714022-de8fc8494b5f?q=80&w=800&auto=format&fit=crop"
+    link: "https://github.com/CryptoPrism-io/CryptoPrism-DB-D",
+    image: "cp-website.png"
   },
   {
     title: "MANAS CORE",
@@ -102,7 +102,7 @@ const PROJECTS = [
     description: "An Agentic, Crypto Forecasting System powered by Google's 500M Forecasting Model, with complete MLOps",
     tags: ["Python", "Forecasting", "Quant Finance", "MLOps", "Pytorch"],
     link: "#",
-    image: "https://images.unsplash.com/photo-1551288049-bbbda536339a?q=80&w=800&auto=format&fit=crop"
+    image: "alpha-stream.jpg"
   },
   {
     title: "VECTOR",

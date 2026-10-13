@@ -6,28 +6,28 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com",
   ),
   title: {
-    default: "Pranav | Developer Portfolio",
-    template: "%s | Pranav Portfolio",
+    default: "Pranav Darekar — AI/ML Engineer & Builder",
+    template: "%s | Pranav Darekar",
   },
   description:
-    "Developer portfolio showcasing Pranav's work, projects, and technical expertise in AI/ML, Data Engineering, and full-stack development.",
+    "AI/ML Engineer & Builder. Curious about how AI systems work and why they matter.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    title: "Pranav | Developer Portfolio",
+    title: "Pranav Darekar — AI/ML Engineer & Builder",
     description:
-      "Developer portfolio showcasing Pranav's work, projects, and technical expertise.",
-    siteName: "Pranav Portfolio",
+      "Curious about how AI systems work and why they matter.",
+    siteName: "Pranav Darekar",
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pranav | Developer Portfolio",
+    title: "Pranav Darekar — AI/ML Engineer & Builder",
     description:
-      "Developer portfolio showcasing Pranav's work, projects, and technical expertise.",
+      "Curious about how AI systems work and why they matter.",
   },
   robots: {
     index: true,
@@ -41,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark scroll-smooth">
+    <html lang="en" className="scroll-smooth">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -50,15 +50,11 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap"
-          rel="stylesheet"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Manrope:wght@500;600;700;800&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="overflow-x-hidden min-h-screen relative antialiased">
+      <body className="bg-white text-[#4B5563] antialiased min-h-screen">
         {children}
       </body>
     </html>

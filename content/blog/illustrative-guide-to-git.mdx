@@ -1,0 +1,242 @@
+---
+title: "An Illustrated Guide to Git — From Commits to CI/CD"
+date: "2026-06-28"
+description: "A visual, no-fluff tour of how Git actually works: the four areas, the commit graph, the commands you'll use daily, advanced moves like rebase and cherry-pick, and how it all flows into CI/CD with GitHub Actions."
+cover: "/blog/illustrative-guide-to-git/cover.png"
+---
+
+Most people learn Git as a list of commands to memorize. That works right up
+until something breaks — a bad merge, a lost commit, a detached HEAD — and the
+commands stop making sense because the *model* underneath was never clear.
+
+This guide takes the opposite approach. We start from the mental model (Git is a
+time machine for your project), then layer the commands on top so they feel
+obvious instead of magical. The illustrations below are the heart of it — the
+prose just walks you through them.
+
+## The big picture: four areas, one flow
+
+Git tracks your project as a series of **snapshots** over time. Locally, your
+work moves through four areas: the **working directory** (your actual files),
+the **staging area / index** (changes you've marked for the next snapshot), the
+**local repository** (all your commits), and the **remote** (the shared copy
+everyone collaborates through).
+
+<Figure
+  src="/blog/illustrative-guide-to-git/page-1.png"
+  alt="A deep dive into Git: the four areas, how Git works under the hood, core components, the most-used operations, branching, remotes, and undoing changes."
+  width="1240"
+  height="1755"
+  caption="Page 1 — A Deep Dive into Git. Click to open full resolution."
+/>
+
+The everyday loop is just four steps:
+
+```bash
+# 1. edit files in your working directory, then:
+git add <file>      # stage the change (move it to the index)
+git commit -m "Add login page"   # snapshot the staged changes locally
+git push            # publish your commits to the remote
+# git pull / git fetch bring others' changes back down
+```
+
+## How Git really works
+
+Under the hood, Git is a **directed acyclic graph (DAG)** of commits. Each commit
+has a unique SHA-1 hash, a pointer to its parent(s), and metadata (author, date,
+message). A commit isn't a diff — it's a full **tree** (snapshot) of your files,
+plus a pointer to where it came from.
+
+Everything is **content-addressable**: the ID of an object is derived from its
+contents. If the content doesn't change, the ID doesn't change — which is exactly
+why Git is fast and deduplicated. The four object types are worth knowing:
+
+- **Blob** — stores file *contents* (Git doesn't store filenames here, just data)
+- **Tree** — directory structure; points to blobs and other trees
+- **Commit** — points to one tree plus its parent commit(s)
+- **Reference** — a movable pointer to a commit. `main`, `feature/login`, and
+  even `HEAD` are just references. Branches are cheap because they're only pointers.
+
+## The commands you'll actually use
+
+You can get remarkably far with a dozen commands. This table is the one to
+screenshot and keep on your second monitor:
+
+<Figure
+  src="/blog/illustrative-guide-to-git/sec-commands.png"
+  alt="The most-used Git operations with examples: init, status, add, commit, log, branch, switch/checkout, merge, pull, push, fetch, reset, revert."
+  width="600"
+  height="815"
+  caption="The everyday command set — init through revert."
+/>
+
+```bash
+git init                       # start tracking a project
+git status                     # what's changed, staged, untracked
+git add <file>                 # stage a change (git add . for everything)
+git commit -m "message"        # record a snapshot
+git log --oneline              # review history, compactly
+git branch <name>              # create a line of development
+git switch <branch>            # move onto another branch
+git merge <branch>             # bring another branch's work into this one
+git pull origin main           # fetch + merge from the remote
+git push origin main           # publish your commits
+git fetch origin               # see what's new remotely, without merging
+```
+
+## Undoing changes — know the difference
+
+This is where most people get scared, usually because `restore`, `reset`, and
+`revert` get mixed up. They are *not* interchangeable:
+
+- `git restore <file>` — discard uncommitted changes in your working directory
+- `git reset --soft HEAD~1` — undo the last commit, **keep** changes staged
+- `git reset --mixed HEAD~1` — undo the last commit, keep changes unstaged
+- `git reset --hard HEAD~1` — undo the last commit **and** discard the changes (dangerous)
+- `git revert <commit>` — create a *new* commit that undoes an old one
+
+The rule of thumb: **`reset` rewrites history; `revert` adds to it.** On a branch
+nobody else has pulled, `reset` is fine. On shared history, reach for `revert` so
+you don't rewrite commits other people already have.
+
+## Advanced operations
+
+Once the basics are muscle memory, a handful of "power tools" keep your history
+clean and your workflow smooth: **rebase**, **cherry-pick**, and **stash**.
+
+<Figure
+  src="/blog/illustrative-guide-to-git/page-2.png"
+  alt="Advanced Git operations: branch, merge, rebase, cherry-pick, stash and stash pop, and a rebase-vs-merge comparison."
+  width="1240"
+  height="1755"
+  caption="Page 2 — Advanced Git Operations. Click to open full resolution."
+/>
+
+**Rebase** replays your branch's commits on top of another branch, producing a
+linear history. It's great for tidying a feature branch *before* you open a PR —
+but only on branches you haven't shared yet.
+
+```bash
+git switch feature/login
+git rebase main          # replay feature commits on top of latest main
+```
+
+**Cherry-pick** grabs a single commit from one branch and applies it to another —
+perfect when a hotfix on one branch is needed elsewhere without merging the whole
+thing.
+
+```bash
+git cherry-pick <commit-hash>
+```
+
+**Stash** parks your uncommitted work so you can switch context — fix an urgent
+bug, then come back exactly where you left off.
+
+```bash
+git stash        # shelve working changes, clean the directory
+# ... fix the urgent thing, commit it ...
+git stash pop    # re-apply your shelved changes and remove them from the shelf
+```
+
+### Rebase vs. merge
+
+The eternal debate, settled by one line: **rebase to keep your *personal* history
+clean; merge to keep the *team's* history honest.**
+
+<Figure
+  src="/blog/illustrative-guide-to-git/sec-rebase-merge.png"
+  alt="Rebase vs merge comparison: merge preserves exact history and is safe for shared branches; rebase creates a cleaner linear history, best for local branches."
+  width="595"
+  height="540"
+  caption="Merge preserves what really happened; rebase rewrites it into a straight line."
+/>
+
+Merge keeps the true shape of how work happened (with a merge commit) and is safe
+on shared branches. Rebase gives you a clean, linear story and is best for local
+branches that haven't been pushed.
+
+## From commits to CI/CD
+
+Git is where your history lives — **CI/CD** is what turns that history into
+shipped software automatically. Every push can trigger a pipeline that builds,
+tests, and deploys your code. On GitHub, that engine is **GitHub Actions**.
+
+<Figure
+  src="/blog/illustrative-guide-to-git/page-3.png"
+  alt="CI/CD and GitHub Actions: CI/CD concepts, Actions building blocks, triggers, secrets and environments, reusability, and a production-ready pipeline."
+  width="1240"
+  height="1755"
+  caption="Page 3 — CI/CD & GitHub Actions. Click to open full resolution."
+/>
+
+The vocabulary is small once you see it laid out: a **workflow** is an automated
+process defined in YAML; an **event** triggers it (a push, a PR, a schedule); a
+**job** is a set of **steps** that run on a **runner**; and **artifacts** are the
+files a workflow produces. Here's a minimal build-and-test workflow:
+
+```yaml
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+```
+
+From there you grow it with **triggers** (`push`, `pull_request`,
+`workflow_dispatch`, `schedule`), **secrets** for credentials, per-environment
+protection rules, and **reusable workflows** so you don't copy-paste pipeline
+logic. The golden rule: keep feedback fast in CI, and deploy with safety in CD.
+
+## Key takeaways
+
+- Git takes **snapshots**, not diffs — that's why it's fast and reliable.
+- **Branches are cheap** (they're just pointers) — use them to experiment safely.
+- **Commits tell a story** — write clear messages; future-you will thank you.
+- When in doubt, **check the log**, and remember you can almost always revert.
+- CI/CD isn't a tool, it's a culture: **automate early, ship confidently.**
+
+<div className="my-12 border-t border-white/10 pt-8">
+  <div className="font-mono text-xs text-primary/70 mb-3">
+    <span className="text-primary">$</span> download --format=pdf --res=high
+  </div>
+  <div className="font-display text-lg text-primary text-glow mb-2">
+    Want the full high-resolution guide?
+  </div>
+  <div className="text-gray-400 text-sm mb-6">
+    Grab all three illustrated pages as a single PDF — a perfect desk reference.
+  </div>
+  <a
+    href="https://drive.google.com/REPLACE-WITH-YOUR-LINK"
+    target="_blank"
+    rel="noopener noreferrer"
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "0.5rem",
+      background: "#4ade80",
+      color: "#000000",
+      fontFamily: '"JetBrains Mono", monospace',
+      fontWeight: 700,
+      fontSize: "0.875rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.06em",
+      textDecoration: "none",
+      padding: "0.75rem 1.75rem",
+      borderRadius: "4px",
+      boxShadow: "0 0 20px rgba(74,222,128,0.35)",
+    }}
+  >
+    Get the full guide (PDF) →
+  </a>
+  <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-gray-600">
+    // 3 pages · pdf · desk reference
+  </div>
+</div>

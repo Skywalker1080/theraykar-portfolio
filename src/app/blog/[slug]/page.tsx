@@ -10,6 +10,8 @@ import "katex/dist/katex.min.css";
 import { getAllPosts, getPost } from "@/lib/blog";
 import { mdxComponents } from "@/components/mdx";
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   return getAllPosts().map((post) => ({ slug: post.slug }));
 }
@@ -45,55 +47,54 @@ export default async function PostPage({
   if (!post) notFound();
 
   return (
-    <main className="min-h-screen max-w-3xl mx-auto px-4 pt-24 pb-20">
-      <Link href="/blog" className="font-mono text-xs text-gray-500 hover:text-primary">
-        ← all posts
-      </Link>
+    <div className="bg-white">
+      <main className="mx-auto min-h-screen w-full max-w-[760px] px-8 pb-[120px] pt-10 md:pt-16">
+        <Link
+          href="/blog"
+          className="text-[14px] font-medium text-[#6B7280] transition-colors duration-150 hover:text-[#111827]"
+        >
+          ← all posts
+        </Link>
 
-      {post.cover ? (
-        <div className="relative mt-6 aspect-[5/2] w-full overflow-hidden rounded-md border border-white/10">
-          <Image
-            src={post.cover}
-            alt={post.title}
-            fill
-            priority
-            sizes="(max-width: 768px) 100vw, 768px"
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
-            <time className="font-mono text-xs text-gray-300">{post.date}</time>
-            <h1 className="font-display text-2xl sm:text-3xl text-primary text-glow mt-1">
-              {post.title}
-            </h1>
+        {post.cover ? (
+          <div className="relative mt-6 aspect-[5/2] w-full overflow-hidden rounded-xl border border-[#ECECED]">
+            <Image
+              src={post.cover}
+              alt={post.title}
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 768px"
+              className="object-cover"
+            />
           </div>
-        </div>
-      ) : (
-        <header className="mt-6">
-          <time className="font-mono text-xs text-gray-500">{post.date}</time>
-          <h1 className="font-display text-3xl text-primary text-glow mt-2">{post.title}</h1>
+        ) : null}
+
+        <header className="mt-6 border-b border-[#ECECED] pb-6">
+          <time className="tabular text-[13px] text-[#9CA3AF]">{post.date}</time>
+          <h1 className="mt-2 text-[32px] font-bold leading-[1.2] tracking-[-0.03em] text-[#111827]">
+            {post.title}
+          </h1>
+          <p className="mt-3 text-[16px] leading-relaxed text-[#4B5563]">
+            {post.description}
+          </p>
         </header>
-      )}
 
-      <p className="text-gray-400 mt-5 mb-8 border-b border-white/10 pb-6">
-        {post.description}
-      </p>
-
-      <article className="blog-prose">
-        <MDXRemote
-          source={post.content}
-          components={mdxComponents}
-          options={{
-            mdxOptions: {
-              remarkPlugins: [remarkMath],
-              rehypePlugins: [
-                rehypeKatex,
-                [rehypePrettyCode, { theme: "github-dark" }],
-              ],
-            },
-          }}
-        />
-      </article>
-    </main>
+        <article className="blog-prose mt-8">
+          <MDXRemote
+            source={post.content}
+            components={mdxComponents}
+            options={{
+              mdxOptions: {
+                remarkPlugins: [remarkMath],
+                rehypePlugins: [
+                  rehypeKatex,
+                  [rehypePrettyCode, { theme: "github-light" }],
+                ],
+              },
+            }}
+          />
+        </article>
+      </main>
+    </div>
   );
 }

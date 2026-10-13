@@ -4,7 +4,7 @@ import type { Metadata, Route } from "next";
 import { getAllPosts } from "@/lib/blog";
 
 export const metadata: Metadata = {
-  title: "Blog",
+  title: "Writing",
   description: "Notes and experiments on AI/ML, data engineering, and building things.",
   alternates: { canonical: "/blog" },
 };
@@ -13,42 +13,56 @@ export default function BlogIndexPage() {
   const posts = getAllPosts();
 
   return (
-    <main className="min-h-screen max-w-3xl mx-auto px-4 pt-24 pb-20">
-      <Link href="/" className="font-mono text-xs text-gray-500 hover:text-primary">
-        ← back to home
-      </Link>
+    <div className="bg-white">
+      <main className="mx-auto min-h-screen w-full max-w-[760px] px-8 pb-[120px] pt-10 md:pt-16">
+        <Link
+          href="/"
+          className="text-[14px] font-medium text-[#6B7280] transition-colors duration-150 hover:text-[#111827]"
+        >
+          ← back to home
+        </Link>
 
-      <h1 className="font-display text-3xl text-primary text-glow mt-6 mb-10">BLOG</h1>
+        <h1 className="mt-6 text-[36px] font-bold leading-[1.15] tracking-[-0.03em] text-[#111827]">
+          Writing
+        </h1>
+        <p className="mt-3 text-[16px] leading-relaxed text-[#4B5563]">
+          Notes and experiments on AI/ML, data engineering, and building things.
+        </p>
 
-      {posts.length === 0 ? (
-        <p className="text-gray-500 font-mono text-sm">No posts yet.</p>
-      ) : (
-        <div className="divide-y divide-white/10">
-          {posts.map((post) => (
-            <Link
-              key={post.slug}
-              href={`/blog/${post.slug}` as Route}
-              className="block group py-8"
-            >
-              {post.cover && (
-                <Image
-                  src={post.cover}
-                  alt={post.title}
-                  width={1200}
-                  height={630}
-                  sizes="(max-width: 768px) 100vw, 768px"
-                  className="rounded-md border border-white/10 mb-4 w-full aspect-[5/2] object-cover"
-                />
-              )}
-              <time className="font-mono text-xs text-gray-500">{post.date}</time>
-              <h2 className="font-display text-xl text-gray-200 group-hover:text-primary transition-colors mt-1">
-                {post.title}
-              </h2>
-              <p className="text-gray-400 mt-2 text-sm leading-6">{post.description}</p>
-            </Link>
-          ))}
+        <div className="mt-10">
+          {posts.length === 0 ? (
+            <p className="text-[16px] text-[#6B7280]">No posts yet.</p>
+          ) : (
+            <div className="divide-y divide-[#F3F4F6] border-y border-[#ECECED]">
+              {posts.map((post) => (
+                <Link
+                  key={post.slug}
+                  href={`/blog/${post.slug}` as Route}
+                  className="group block py-8"
+                >
+                  {post.cover && (
+                    <Image
+                      src={post.cover}
+                      alt={post.title}
+                      width={1200}
+                      height={630}
+                      sizes="(max-width: 768px) 100vw, 768px"
+                      className="mb-4 aspect-[5/2] w-full rounded-xl border border-[#ECECED] object-cover"
+                    />
+                  )}
+                  <time className="tabular text-[13px] text-[#9CA3AF]">{post.date}</time>
+                  <h2 className="mt-1 text-[20px] font-semibold tracking-[-0.01em] text-[#111827] group-hover:underline group-hover:underline-offset-4">
+                    {post.title}
+                  </h2>
+                  <p className="mt-1 text-[15px] leading-relaxed text-[#6B7280]">
+                    {post.description}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </main>
+      </main>
+    </div>
   );
 }

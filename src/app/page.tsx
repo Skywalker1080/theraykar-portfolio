@@ -116,7 +116,7 @@ const TOOLS = [
   { name: "Next.js", logo: "/logos/nextdotjs.svg", note: "Frontends that go from idea to URL quickly." },
   { name: "PostgreSQL", logo: "/logos/postgresql.svg", note: "The database I reach for first." },
   { name: "Docker", logo: "/logos/docker.svg", note: "If it runs here, it runs there." },
-  { name: "AWS", note: "Where the production infra lives." },
+  { name: "AWS", logo: "/aws-svg 1.png", note: "Where the production infra lives." },
   { name: "LangGraph", logo: "/logos/langgraph.svg", note: "For agents that need to stay in control." },
   { name: "MLflow", logo: "/logos/mlflow.svg", note: "Keeps experiments honest and reproducible." },
   { name: "PyTorch", logo: "/logos/pytorch.svg", note: "My default for training and fine-tunes." },
@@ -407,10 +407,8 @@ export default function Home() {
             {TOOLS.map((t) => (
               <li key={t.name} className="flex items-start gap-3 px-1">
                 {t.logo ? (
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-[#ECECED] bg-white">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={t.logo} alt={`${t.name} logo`} className="h-4 w-4 object-contain" />
-                  </span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={t.logo} alt={`${t.name} logo`} className="mt-[2px] h-5 w-5 shrink-0 object-contain" />
                 ) : (
                   <LogoMark alt={`${t.name} mark`} letter={t.name[0]} />
                 )}

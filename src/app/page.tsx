@@ -111,17 +111,17 @@ const NOW_STATS = [
 ];
 
 const TOOLS = [
-  { name: "Python", logo: "/logos/python.svg", note: "The default for anything with gradients or data." },
+  { name: "Python", logo: "/python 1.png", note: "The default for anything with gradients or data." },
   { name: "FastAPI", logo: "/logos/fastapi.svg", note: "Ships ML backends fast, with types end to end." },
   { name: "Next.js", logo: "/logos/nextdotjs.svg", note: "Frontends that go from idea to URL quickly." },
   { name: "PostgreSQL", logo: "/logos/postgresql.svg", note: "The database I reach for first." },
-  { name: "Docker", logo: "/logos/docker.svg", note: "If it runs here, it runs there." },
+  { name: "Docker", logo: "/docker-svg 1.png", note: "If it runs here, it runs there." },
   { name: "AWS", logo: "/aws-svg 1.png", note: "Where the production infra lives." },
   { name: "LangGraph", logo: "/logos/langgraph.svg", note: "For agents that need to stay in control." },
   { name: "MLflow", logo: "/logos/mlflow.svg", note: "Keeps experiments honest and reproducible." },
-  { name: "PyTorch", logo: "/logos/pytorch.svg", note: "My default for training and fine-tunes." },
-  { name: "Claude Code", logo: "/logos/anthropic.svg", note: "The pair programmer I use every day." },
-  { name: "Kubernetes", logo: "/logos/kubernetes.svg", note: "For when containers need to scale." },
+  { name: "PyTorch", logo: "/pytorch-svg 1.png", note: "My default for training and fine-tunes." },
+  { name: "Claude Code", logo: "/claudecode 1.png", note: "The pair programmer I use every day." },
+  { name: "Kubernetes", logo: "/kubernetes-svg 1.png", note: "For when containers need to scale." },
 ];
 
 const PRINCIPLES = [

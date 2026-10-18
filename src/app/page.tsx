@@ -406,8 +406,8 @@ export default function Home() {
           <ul className="grid grid-cols-1 gap-x-6 gap-y-[20px] sm:grid-cols-2">
             {TOOLS.map((t) => (
               <li key={t.name} className="flex items-start gap-3 px-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {t.logo ? (
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={t.logo} alt={`${t.name} logo`} className="mt-[2px] h-5 w-5 shrink-0 object-contain" />
                 ) : (
                   <LogoMark alt={`${t.name} mark`} letter={t.name[0]} />

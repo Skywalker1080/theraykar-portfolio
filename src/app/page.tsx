@@ -1,23 +1,62 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getAllPosts } from "@/lib/blog";
+import { RECENT_WORK } from "@/lib/work";
+import { ProjectGlyph } from "@/components/project-glyph";
+import { HobbyGlyph } from "@/components/hobby-glyph";
+import { NowHud } from "@/components/now-hud";
+import { TechStackStrip } from "@/components/tech-stack-strip";
+import { FocusPipeline } from "@/components/focus-pipeline";
 
 /* ════════════════════════════════════════════════════════════════
    DATA — Pranav content mapped onto the reference structure
    ════════════════════════════════════════════════════════════════ */
 
+const INTRO = [
+  {
+    label: "What",
+    text: "I'm an AI engineer on the founding team at Crypto Prism. I build production AI agents end to end: the data pipelines that feed them, the backends they run on, the evals that keep them honest, and the cloud deploys that ship them.",
+  },
+  {
+    label: "Why",
+    text: "Most agents look great in a demo and break in production. The difference is the “boring” infra around the model, and that's the part I love building.",
+  },
+  {
+    label: "How",
+    text: "I own the full path from raw data to a live endpoint, with Python, FastAPI, LangGraph, Kafka and AWS. I care deeply about craft and polish, and ship something every day.",
+  },
+];
+
 const EXPERIENCE = [
   {
     company: "Crypto Prism",
     logo: "/cp.svg",
-    role: "AI Engineer",
-    period: "2025",
+    role: "Founding AI Engineer",
+    about: "An AI crypto analytics platform: ask about any coin in plain English and get a quant-grade read.",
+    period: "2024",
     href: "https://cryptoprism-io.web.app/",
+    // Outcome first: the bold lead is what a recruiter should take away from each line.
+    highlights: [
+      { lead: "Shipped 3 AI agents to production", text: "taking each from prototype to a live product used by real users." },
+      { lead: "Secured $10K in funding from AWS", text: "to run and scale the platform." },
+      { lead: "Owned the AWS infrastructure", text: "designing and deploying the cloud stack the product runs on." },
+      { lead: "Helped build the team", text: "interviewing and assessing interns and freelancers." },
+      { lead: "Worked directly with stakeholders and beta users", text: "turning their feedback into product decisions, and reviewing code across the team." },
+    ],
   },
   {
-    company: "Coolboots Media",
+    company: "Times Internet",
+    logo: "/times-internet.png",
     role: "Creative Engineer",
+    about: "India's largest digital products company, behind Times of India, Cricbuzz and Gaana.",
     period: "2024",
+    highlights: [
+      { lead: "Built an AI-driven branching narrative game", text: "set in the world of the Mahabharata, where player choices shape the story." },
+      { lead: "Designed the game dynamics", text: "owning the game plan, branching logic and player progression." },
+      { lead: "Built RAG pipelines and custom GPTs", text: "that generate story episodes grounded in the source mythology." },
+      { lead: "Worked directly with the CXOs", text: "brainstorming product direction and shaping the game with them." },
+      { lead: "Shaped the creative side", text: "contributing to platform UI design, episode generation and the story narrative." },
+    ],
   },
 ];
 
@@ -30,13 +69,14 @@ const EDUCATION = [
   },
 ];
 
-const RECENT_WORK = [
+// Each side project shows an image beside its card; swap the placeholder paths for real screenshots.
+const SIDE_PROJECTS = [
   {
-    title: "Crypto Prism",
+    title: "Crypto Quant Data Engine",
     description:
-      "Ask about any coin in plain English and get an instant, quant-grade read on it.",
-    image: "/cp-website.png",
-    href: "https://cryptoprism-io.firebaseapp.com/",
+      "A production pipeline that ingests 1,000 coins daily, computes 100+ quant indicators in parallel, and has rebuilt 2.6M rows of history with health checks and safe, versioned backfills.",
+    image: "/placeholder-project.svg",
+    href: "https://github.com/CryptoPrism-io/CryptoPrism-DB-D",
   },
   {
     title: "Context Window",
@@ -45,97 +85,83 @@ const RECENT_WORK = [
     image: "/context-window.png",
     href: "http://context-window.vercel.app/",
   },
-];
-
-const SIDE_PROJECTS = [
   {
     title: "MANAS CORE",
     description:
       "A private AI journal that turns your daily notes into searchable insights.",
+    image: "/placeholder-project.svg",
     href: "https://github.com/Skywalker1080/manasCore.git",
   },
   {
     title: "ALPHA STREAM",
     description:
       "Live crypto forecasts that update themselves as the market moves.",
+    image: "/placeholder-project.svg",
     href: "#",
   },
   {
-    title: "Illustrative Guide to Git",
+    title: "Gyanmarg",
     description:
-      "A visual, plain-English walkthrough of how Git actually works.",
-    href: "/blog/illustrative-guide-to-git",
+      "A gamified learning app that turns 45+ books into bite-sized lessons, using spaced repetition and active recall so what you read actually sticks.",
+    image: "/placeholder-project.svg",
+    href: "https://ai-polymind.web.app",
+  },
+  {
+    title: "Enterprise RAG",
+    description:
+      "Upload your documents and ask questions about them, with every answer cited back to the exact passage.",
+    image: "/placeholder-project.svg",
+    href: "https://github.com/Skywalker1080/production-rag",
   },
 ];
 
+// Life outside work, shown as a row of slightly tilted "stickers" that straighten on hover.
 const BEYOND = [
-  "Gaming",
-  "Plane spotting",
-  "Blender 3D",
-  "Weight lifting",
-  "Chess",
-  "Long walks",
-  "Think and Grow Rich",
-  "Deep Learning (Goodfellow)",
-  "The Red Queen (Ridley)",
-  "Reinforcement Learning",
-  "Robotics",
-  "LLM infrastructure",
-];
-
-const NOW_STATS = [
-  {
-    icon: "🚀",
-    value: "Daily",
-    label: "Build streak",
-    note: "Shipping on Crypto Prism every day.",
-  },
-  {
-    icon: "🏋️",
-    value: "5× / week",
-    label: "Training",
-    note: "Weight lifting and long walks.",
-  },
-  {
-    icon: "📚",
-    value: "Always",
-    label: "Reading",
-    note: "DL systems, RL, and inference optimization.",
-  },
-  {
-    icon: "🧠",
-    value: "Deep work",
-    label: "Default mode",
-    note: "Fewer meetings, longer builds.",
-  },
+  { kind: "gaming" as const, title: "Gaming", line: "Story-driven worlds and the occasional all-nighter." },
+  { kind: "training" as const, title: "Training", line: "Lifting most days. My body is a long-term project too." },
+  { kind: "reading" as const, title: "Reading", line: "Self-help books that change how I think, one habit at a time." },
+  { kind: "riding" as const, title: "Riding", line: "Long rides with no destination. Best way to clear my head." },
+  { kind: "cooking" as const, title: "Cooking", line: "Exotic dishes from scratch. Results vary, fun doesn't." },
 ];
 
 const TOOLS = [
-  { name: "Python", logo: "/python 1.png", note: "The default for anything with gradients or data." },
-  { name: "FastAPI", logo: "/logos/fastapi.svg", note: "Ships ML backends fast, with types end to end." },
-  { name: "Next.js", logo: "/logos/nextdotjs.svg", note: "Frontends that go from idea to URL quickly." },
-  { name: "PostgreSQL", logo: "/logos/postgresql.svg", note: "The database I reach for first." },
-  { name: "Docker", logo: "/docker-svg 1.png", note: "If it runs here, it runs there." },
-  { name: "AWS", logo: "/aws-svg 1.png", note: "Where the production infra lives." },
-  { name: "LangGraph", logo: "/logos/langgraph.svg", note: "For agents that need to stay in control." },
-  { name: "MLflow", logo: "/logos/mlflow.svg", note: "Keeps experiments honest and reproducible." },
-  { name: "PyTorch", logo: "/pytorch-svg 1.png", note: "My default for training and fine-tunes." },
-  { name: "Claude Code", logo: "/claudecode 1.png", note: "The pair programmer I use every day." },
-  { name: "Kubernetes", logo: "/kubernetes-svg 1.png", note: "For when containers need to scale." },
+  { name: "Python", logo: "/python 1.svg", note: "The default for anything with gradients or data." },
+  { name: "FastAPI", logo: "/fastapi 1.svg", note: "Ships ML backends fast, with types end to end." },
+  { name: "TypeScript", logo: "/typescript 1.svg", note: "Types that catch the bug before the user does." },
+  { name: "Next.js", logo: "/nextdotjs 1.svg", note: "Frontends that go from idea to URL quickly." },
+  { name: "PostgreSQL", logo: "/postgresql 1.svg", note: "The database I reach for first." },
+  { name: "Kafka", logo: "/apachekafka 1.svg", note: "Streams market data through the pipeline in real time." },
+  { name: "Docker", logo: "/docker-svg 1.svg", note: "If it runs here, it runs there." },
+  { name: "AWS", logo: "/aws-svg 1.svg", note: "Where the production infra lives." },
+  { name: "LangGraph", logo: "/langchain 1.svg", note: "For agents that need to stay in control." },
+  { name: "MLflow", logo: "/mlflow 1.svg", note: "Keeps experiments honest and reproducible." },
+  { name: "PyTorch", logo: "/pytorch-svg 1.svg", note: "My default for training and fine-tunes." },
+  { name: "GitHub", logo: "/github 1.svg", note: "Where every project lives, ships, and gets reviewed." },
+  { name: "Claude Code", logo: "/claudecode 1.svg", note: "The pair programmer I use every day." },
+  { name: "Kubernetes", logo: "/kubernetes-svg 1.svg", note: "For when containers need to scale." },
 ];
 
 const PRINCIPLES = [
-  "Own the full path to production.",
-  "Caring deeply about something is rare, and beautiful.",
-  "Focus on improving your technique, outcomes will follow.",
-  "Just showing up every day can change your life.",
-  "Being fun to work with is a competitive advantage.",
-  "Stay humble. You're not above anyone.",
-  "There is no such thing as a bad decision, only feedback.",
-  "Being on time is a sign of respect.",
-  "Good taste is a muscle that can be built.",
-  "Reflect obsessively, and refuse to lie to yourself.",
+  "Always think from first principles.",
+  "Everything in life is a project: body, mind, money, relationships.",
+  "Derive your vision from your anti-vision.",
+  "The fastest way to change your life is to reflect on it obsessively, and never lie to yourself.",
+  "Keep life simple: What, Why and How. That's it.",
 ];
+
+const EMAIL = "pranav.darekar1080@gmail.com";
+
+const ELSEWHERE = [
+  { name: "GitHub", handle: "@Skywalker1080", note: "Where I ship", href: "https://github.com/Skywalker1080" },
+  { name: "X", handle: "@the_ray_kar", note: "Learnings from everyday building", href: "https://x.com/the_ray_kar" },
+  { name: "LinkedIn", handle: "pranav-darekar", note: "Career updates and longer posts", href: "https://linkedin.com/in/pranav-darekar" },
+  { name: "Email", handle: EMAIL, note: "The fastest way to reach me", href: `mailto:${EMAIL}` },
+];
+
+// "2026-06-28" -> "Jun 28, 2026"
+function formatDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 /* ════════════════════════════════════════════════════════════════
    SMALL PIECES
@@ -172,8 +198,10 @@ export default function Home() {
       <main className="mx-auto w-full max-w-[760px] px-8 pb-[120px] pt-10 md:pt-16">
         {/* ── Top bar: name + nav ─────────────────────────── */}
         <header className="mb-14 flex items-center justify-between">
-          <p className="text-[13px] font-semibold tracking-[0.08em] text-[#111827] uppercase">
-            Pranav Darekar
+          {/* Name occasionally shimmers into the handle; see .brand-swap in globals.css */}
+          <p className="brand-swap text-[13px] font-semibold tracking-[0.08em] text-[#111827]">
+            <span className="brand-name uppercase">Pranav Darekar</span>
+            <span className="brand-handle" aria-hidden="true">/theraykar</span>
           </p>
           <nav className="flex items-center gap-5 text-[14px] font-medium text-[#6B7280]">
             <Link href="/blog" className="transition-colors duration-150 hover:text-[#111827]">
@@ -200,34 +228,40 @@ export default function Home() {
 
         {/* ── Hero ────────────────────────────────────────── */}
         <section className="mb-[64px]">
-          <Image
-            src="/pfp.jpg"
-            alt="Pranav Darekar"
-            width={96}
-            height={96}
-            className="mb-6 h-24 w-24 rounded-full object-cover"
-          />
+          <div className="mb-6 flex items-center gap-3 sm:gap-5">
+            <Image
+              src="/pfp.jpg"
+              alt="Pranav Darekar"
+              width={96}
+              height={96}
+              className="h-24 w-24 shrink-0 rounded-full object-cover"
+            />
+            <TechStackStrip tools={TOOLS} />
+          </div>
           <h1 className="page-heading">
             Building production AI agents &amp; the &ldquo;boring&rdquo; infra
             behind them.
-            <br />
-            Backends, evals, guardrails &amp; cloud deployments.
           </h1>
-          <div className="mt-6 space-y-4 text-[17px] leading-[1.65] text-[#4a4948]">
-            <p>
-              I was lucky to have fallen in love with building early, and luckier
-              to still feel the same way after shipping production AI systems.
-            </p>
-            <p>
-              I consider myself a creator at heart and care deeply about craft
-              and polish. I&apos;m currently part of the founding team at
-              Crypto Prism — working across the product, from data pipelines
-              and agent backends to evals and cloud deployments.
-            </p>
+          <p className="mt-5 text-[15px] text-[#6B7280]">
+            In practice, that means I build these for your AI agents:
+          </p>
+          <FocusPipeline />
+          {/* What / Why / How: a quick read on the specialization for anyone skimming */}
+          <dl className="mt-8 space-y-4 text-[17px] leading-[1.65] text-[#4a4948]">
+            {INTRO.map((row) => (
+              <div key={row.label} className="grid gap-1 sm:grid-cols-[64px_1fr] sm:gap-4">
+                <dt className="pt-[5px] font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[#C026D3]">
+                  {row.label}
+                </dt>
+                <dd>{row.text}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-6 text-[17px] leading-[1.65] text-[#4a4948]">
             <p>
               Some of the best conversations I&apos;ve had started with a random
               hello on the internet. So…{" "}
-              <a href="mailto:pranav.darekar1080@gmail.com" className="editorial-link">
+              <a href={`mailto:${EMAIL}`} className="editorial-link">
                 Message me <span className="arrow">→</span>
               </a>
             </p>
@@ -255,14 +289,290 @@ export default function Home() {
                 "flex items-center gap-4 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-gray-50/50";
               return (
                 <li key={job.company}>
-                  {job.href ? (
-                    <a href={job.href} target="_blank" rel="noopener noreferrer" className={cls}>
-                      {row}
-                    </a>
+                  {job.highlights ? (
+                    // Achievements sit behind a dropdown; the pulsing hint nudges a click until it's opened.
+                    <details className="exp-details group">
+                      <summary className={`${cls} cursor-pointer list-none flex-wrap [&::-webkit-details-marker]:hidden`}>
+                        {row}
+                        {job.about && (
+                          <span className="basis-full pl-[36px] text-[14px] leading-snug text-[#6B7280]">
+                            {job.about}
+                          </span>
+                        )}
+                        <span className="exp-hint basis-full pl-[36px] font-mono text-[12px] text-[#C026D3]">
+                          <span className="group-open:hidden">See what I achieved here</span>
+                          <span className="hidden group-open:inline">Hide achievements</span>
+                          <span className="ml-1 inline-block transition-transform duration-200 group-open:rotate-180">▾</span>
+                        </span>
+                      </summary>
+                      <p className="px-3 pt-1 text-[14px] text-[#6B7280] md:hidden">{job.role}</p>
+                      <ul className="exp-panel mt-3 space-y-2 pl-[48px] pr-3">
+                        {job.highlights.map((h) => (
+                          <li key={h.lead} className="relative text-[15px] leading-[1.6] text-[#6B7280]">
+                            <span
+                              aria-hidden="true"
+                              className="absolute -left-[14px] top-[9px] h-[5px] w-[5px] rounded-full bg-gradient-to-b from-[#F4ADFF] to-[#EA00FF]"
+                            />
+                            <span className="font-semibold text-[#111827]">{h.lead}</span>, {h.text}
+                          </li>
+                        ))}
+                      </ul>
+                      {job.href && (
+                        <a
+                          href={job.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="editorial-link ml-[48px] mt-3 inline-block text-[14px]"
+                        >
+                          Visit {job.company} <span className="arrow">→</span>
+                        </a>
+                      )}
+                    </details>
                   ) : (
-                    <div className={cls}>{row}</div>
+                    <>
+                      {job.href ? (
+                        <a href={job.href} target="_blank" rel="noopener noreferrer" className={cls}>
+                          {row}
+                        </a>
+                      ) : (
+                        <div className={cls}>{row}</div>
+                      )}
+                      <p className="px-3 pt-1 text-[14px] text-[#6B7280] md:hidden">{job.role}</p>
+                    </>
                   )}
-                  <p className="px-3 pt-1 text-[14px] text-[#6B7280] md:hidden">{job.role}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        {/* ── Recent Work ─────────────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Recent Work</SectionLabel>
+          <div className="space-y-6">
+            {RECENT_WORK.map((work) => {
+              const href = work.slug ? `/work/${work.slug}` : work.href;
+              const external = !href.startsWith("/");
+              return (
+                <a
+                  key={work.title}
+                  href={href}
+                  target={external ? "_blank" : undefined}
+                  rel={external ? "noopener noreferrer" : undefined}
+                  className="group block overflow-hidden rounded-xl border border-[#ECECED] bg-white transition-colors duration-150 hover:border-[#E5E7EB] hover:bg-[#F7F7F8]"
+                >
+                  <span className="relative block aspect-[16/9] w-full overflow-hidden bg-[#F7F7F8]">
+                    <Image
+                      src={work.image}
+                      alt={work.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 760px"
+                      className="object-cover"
+                    />
+                  </span>
+                  <span className="block p-5">
+                    <span className="block text-[16px] font-semibold tracking-[-0.01em] text-[#111827]">
+                      {work.title}
+                    </span>
+                    <span className="mt-1 block text-[14px] leading-relaxed text-[#6B7280]">
+                      {work.description}
+                    </span>
+                    {work.projects && (
+                      // Teaser for the detail page: what's inside, and a nudge to open it.
+                      <span className="mt-4 block border-t border-[#ECECED] pt-3">
+                        <span className="block text-[13px] text-[#6B7280]">
+                          {work.projects.length} projects inside
+                        </span>
+                        <span className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                          {work.projects.map((p) => (
+                            <span key={p.name} className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[#111827]">
+                              <ProjectGlyph kind={p.area} size={26} />
+                              {p.name}
+                            </span>
+                          ))}
+                        </span>
+                        <span className="sub-hint mt-2 inline-block font-mono text-[12px] text-[#C026D3]">
+                          See how I built it{" "}
+                          <span className="inline-block transition-transform duration-150 group-hover:translate-x-1">→</span>
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ── Side Projects ───────────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Side Projects</SectionLabel>
+          <p className="mb-5 text-[16px] leading-[1.65] text-[#4a4948]">
+            I&apos;m learning inference optimization and exploring new AI tools.
+            Earlier, I built local-first journaling and agentic forecasting
+            systems.
+          </p>
+          <div className="space-y-4">
+            {SIDE_PROJECTS.map((p) => {
+              const external = p.href.startsWith("http");
+              return (
+                <a
+                  key={p.title}
+                  href={p.href}
+                  target={external ? "_blank" : undefined}
+                  rel={external ? "noopener noreferrer" : undefined}
+                  className="group flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4"
+                >
+                  <span className="relative block aspect-[16/10] w-full shrink-0 overflow-hidden rounded-xl border border-[#ECECED] bg-[#F7F7F8] sm:w-[220px]">
+                    <Image
+                      src={p.image}
+                      alt={`${p.title} preview`}
+                      fill
+                      sizes="(max-width: 640px) 100vw, 220px"
+                      unoptimized={p.image.endsWith(".svg")}
+                      className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
+                  </span>
+                  <span className="flex flex-1 flex-col justify-center rounded-xl border border-[#ECECED] bg-white p-5 transition-colors duration-150 group-hover:bg-[#F7F7F8]">
+                    <span className="block text-[15px] font-semibold text-[#111827]">
+                      {p.title}
+                    </span>
+                    <span className="mt-2 block text-[14px] leading-relaxed text-[#6B7280]">
+                      {p.description}
+                    </span>
+                    <span className="mt-3 block text-[14px] font-medium text-[#111827]">
+                      Open <span className="inline-block transition-transform duration-150 group-hover:translate-x-1">→</span>
+                    </span>
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ── Beyond work ─────────────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Beyond Work</SectionLabel>
+          <p className="mb-6 text-[16px] leading-[1.65] text-[#4a4948]">
+            When I log off, I&apos;m usually doing one of these. They&apos;re how
+            I recharge, and honestly where a lot of my best ideas show up.
+          </p>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {BEYOND.map((b, i) => (
+              <li
+                key={b.title}
+                className="beyond-sticker group rounded-2xl border border-[#ECECED] bg-white p-4 text-center"
+                style={{ "--tilt": `${i % 2 === 0 ? -2.5 : 2.5}deg` } as React.CSSProperties}
+              >
+                <span className="beyond-glyph inline-block">
+                  <HobbyGlyph kind={b.kind} />
+                </span>
+                <span className="mt-3 block text-[15px] font-semibold text-[#111827]">{b.title}</span>
+                <span className="mt-1 block text-[12.5px] leading-snug text-[#6B7280]">{b.line}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── Now ─────────────────────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Now</SectionLabel>
+          <NowHud />
+        </section>
+
+        {/* ── Favourite Tools ─────────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Favourite Tools</SectionLabel>
+          <p className="mb-5 text-[16px] leading-[1.65] text-[#4a4948]">
+            I&apos;m drawn to tools that feel functional and well-considered,
+            where someone has clearly cared about the details.
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {TOOLS.map((t) => (
+              <li
+                key={t.name}
+                className="inline-flex items-center gap-2 rounded-full border border-[#ECECED] bg-white py-1.5 pl-2 pr-3.5 text-[14px] font-medium text-[#111827]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={t.logo} alt="" className="h-[18px] w-[18px] object-contain" />
+                {t.name}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── Principles ──────────────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Principles</SectionLabel>
+          <ol className="space-y-3">
+            {PRINCIPLES.map((p, i) => (
+              <li key={p} className="flex gap-4 text-[16px] leading-[1.65] text-[#4a4948]">
+                <span className="tabular shrink-0 pt-[3px] font-mono text-[12px] text-[#C026D3]">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {p}
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* ── Writing (blog — kept feature) ───────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Writing</SectionLabel>
+          {posts.length === 0 ? (
+            <p className="text-[16px] text-[#6B7280]">
+              Notes and experiments on AI/ML —{" "}
+              <Link href="/blog" className="editorial-link">
+                all posts <span className="arrow">→</span>
+              </Link>
+            </p>
+          ) : (
+            <div className="divide-y divide-[#F3F4F6] border-y border-[#ECECED]">
+              {posts.map((post) => (
+                <Link key={post.slug} href={`/blog/${post.slug}`} className="group block py-5">
+                  <time dateTime={post.date} className="tabular font-mono text-[12px] text-[#C026D3]">
+                    {formatDate(post.date)}
+                  </time>
+                  <span className="mt-1 block text-[17px] font-semibold tracking-[-0.01em] text-[#111827] decoration-[#EA00FF] group-hover:underline group-hover:underline-offset-4">
+                    {post.title}
+                  </span>
+                  <span className="mt-1 block text-[15px] leading-relaxed text-[#6B7280]">
+                    {post.description}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+          <p className="mt-4">
+            <Link href="/blog" className="editorial-link text-[16px]">
+              All writing <span className="arrow">→</span>
+            </Link>
+          </p>
+        </section>
+
+        {/* ── Around the Internet ─────────────────────────── */}
+        <section className="mb-[64px]">
+          <SectionLabel>Around the Internet</SectionLabel>
+          <ul className="divide-y divide-[#F3F4F6] border-y border-[#ECECED]">
+            {ELSEWHERE.map((e) => {
+              const external = e.href.startsWith("http");
+              return (
+                <li key={e.name}>
+                  <a
+                    href={e.href}
+                    target={external ? "_blank" : undefined}
+                    rel={external ? "noopener noreferrer" : undefined}
+                    className="group flex items-baseline gap-4 py-3.5"
+                  >
+                    <span className="w-[72px] shrink-0 text-[15px] font-semibold text-[#111827]">{e.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-mono text-[13px] text-[#C026D3]">{e.handle}</span>
+                      <span className="block text-[14px] text-[#6B7280]">{e.note}</span>
+                    </span>
+                    <span className="shrink-0 text-[16px] text-[#9CA3AF] transition-all duration-150 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#EA00FF]">
+                      ↗
+                    </span>
+                  </a>
                 </li>
               );
             })}
@@ -291,244 +601,43 @@ export default function Home() {
               </li>
             ))}
           </ul>
-          <p className="mt-3 px-3 text-[14px] leading-relaxed text-[#6B7280] md:hidden">
-            B.E in Automation and Robotics
-          </p>
-        </section>
-
-        {/* ── Recent Work ─────────────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Recent Work</SectionLabel>
-          <div className="space-y-6">
-            {RECENT_WORK.map((work) => (
-              <a
-                key={work.title}
-                href={work.href}
-                target={work.href.startsWith("/") ? undefined : "_blank"}
-                rel="noopener noreferrer"
-                className="group block overflow-hidden rounded-xl border border-[#ECECED] bg-white transition-colors duration-150 hover:border-[#E5E7EB] hover:bg-[#F7F7F8]"
-              >
-                <span className="relative block aspect-[16/9] w-full overflow-hidden bg-[#F7F7F8]">
-                  <Image
-                    src={work.image}
-                    alt={work.title}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 760px"
-                    className="object-cover"
-                  />
-                </span>
-                <span className="block p-5">
-                  <span className="block text-[16px] font-semibold tracking-[-0.01em] text-[#111827]">
-                    {work.title}
-                  </span>
-                  <span className="mt-1 block text-[14px] leading-relaxed text-[#6B7280]">
-                    {work.description}
-                  </span>
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Side Projects ───────────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Side Projects</SectionLabel>
-          <p className="mb-5 text-[16px] leading-[1.65] text-[#4a4948]">
-            I&apos;m learning inference optimization and exploring new AI tools.
-            Earlier, I built local-first journaling and agentic forecasting
-            systems.
-          </p>
-          <div className="space-y-4">
-            {SIDE_PROJECTS.map((p) => (
-              <a
-                key={p.title}
-                href={p.href}
-                className="group block rounded-xl border border-[#ECECED] bg-white p-5 transition-colors duration-150 hover:bg-[#F7F7F8]"
-              >
-                <span className="block text-[15px] font-semibold text-[#111827]">
-                  {p.title}
-                </span>
-                <span className="mt-2 block text-[14px] leading-relaxed text-[#6B7280]">
-                  {p.description}
-                </span>
-                <span className="mt-3 block text-[14px] font-medium text-[#111827]">
-                  Open <span className="inline-block transition-transform duration-150 group-hover:translate-x-1">→</span>
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Beyond work ─────────────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Beyond Work</SectionLabel>
-          <p className="mb-5 text-[16px] leading-[1.65] text-[#4a4948]">
-            When I&apos;m not training models, I&apos;m training myself —
-            lifting, spotting planes, modelling in Blender, or going down a
-            reading rabbit hole.
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {BEYOND.map((item) => (
-              <li
-                key={item}
-                className="rounded-full border border-[#ECECED] bg-white px-3.5 py-1.5 text-[14px] text-[#374151]"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ── Now ─────────────────────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Now</SectionLabel>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {NOW_STATS.map((s) => (
-              <div key={s.label} className="rounded-xl border border-[#ECECED] bg-white p-5">
-                <p className="text-[22px]">{s.icon}</p>
-                <p className="mt-2 text-[16px] font-semibold text-[#111827]">{s.value}</p>
-                <p className="text-[13px] font-medium uppercase tracking-[0.06em] text-[#9CA3AF]">
-                  {s.label}
-                </p>
-                <p className="mt-1 text-[14px] text-[#6B7280]">{s.note}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Favourite Tools ─────────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Favourite Tools</SectionLabel>
-          <p className="mb-5 text-[16px] leading-[1.65] text-[#4a4948]">
-            I&apos;m drawn to tools that feel functional and well-considered,
-            where someone has clearly cared about the details.
-          </p>
-          <ul className="grid grid-cols-1 gap-x-6 gap-y-[20px] sm:grid-cols-2">
-            {TOOLS.map((t) => (
-              <li key={t.name} className="flex items-start gap-3 px-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {t.logo ? (
-                  <img src={t.logo} alt={`${t.name} logo`} className="mt-[2px] h-5 w-5 shrink-0 object-contain" />
-                ) : (
-                  <LogoMark alt={`${t.name} mark`} letter={t.name[0]} />
-                )}
-                <div className="min-w-0">
-                  <p className="text-[15px] font-semibold text-[#111827]">{t.name}</p>
-                  <p className="text-[14px] text-[#6B7280]">{t.note}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ── Principles ──────────────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Principles</SectionLabel>
-          <p className="mb-4 text-[14px] text-[#9CA3AF]">In no particular order:</p>
-          <ul className="list-disc space-y-2 pl-5 text-[16px] leading-[1.65] text-[#4a4948]">
-            {PRINCIPLES.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ── Writing (blog — kept feature) ───────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Writing</SectionLabel>
-          {posts.length === 0 ? (
-            <p className="text-[16px] text-[#6B7280]">
-              Notes and experiments on AI/ML —{" "}
-              <Link href="/blog" className="editorial-link">
-                all posts <span className="arrow">→</span>
-              </Link>
+          {EDUCATION.map((edu) => (
+            <p key={edu.school} className="mt-1 px-3 text-[14px] leading-relaxed text-[#6B7280] md:hidden">
+              {edu.degree}
             </p>
-          ) : (
-            <div className="divide-y divide-[#F3F4F6] border-y border-[#ECECED]">
-              {posts.map((post) => (
-                <Link key={post.slug} href={`/blog/${post.slug}`} className="group block py-5">
-                  <time className="tabular text-[13px] text-[#9CA3AF]">{post.date}</time>
-                  <span className="mt-1 block text-[17px] font-semibold tracking-[-0.01em] text-[#111827] group-hover:underline group-hover:underline-offset-4">
-                    {post.title}
-                  </span>
-                  <span className="mt-1 block text-[15px] leading-relaxed text-[#6B7280]">
-                    {post.description}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-          <p className="mt-4">
-            <Link href="/blog" className="editorial-link text-[16px]">
-              All writing <span className="arrow">→</span>
-            </Link>
-          </p>
-        </section>
-
-        {/* ── Around the Internet ─────────────────────────── */}
-        <section className="mb-[64px]">
-          <SectionLabel>Around the Internet</SectionLabel>
-          <p className="text-[16px] leading-[1.65] text-[#4a4948]">
-            GitHub is where I ship, X is where I share learnings from everyday
-            building.
-          </p>
-          <ul className="mt-4 space-y-3 text-[16px]">
-            <li>
-              <a
-                href="https://github.com/Skywalker1080"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="editorial-link"
-              >
-                GitHub <span className="arrow">→</span>
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://x.com/the_ray_kar"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="editorial-link"
-              >
-                Twitter (X) <span className="arrow">→</span>
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://linkedin.com/in/pranav-darekar"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="editorial-link"
-              >
-                LinkedIn <span className="arrow">→</span>
-              </a>
-            </li>
-          </ul>
+          ))}
         </section>
 
         {/* ── Footer ──────────────────────────────────────── */}
-        <footer className="border-t border-[#ECECED] pt-6">
-          <p className="text-[14px] text-[#6B7280]">Pune, India — perfect weather for a long build :)</p>
-          <div className="mt-3 flex items-center gap-5 text-[14px] font-medium text-[#6B7280]">
-            <Link href="/blog" className="transition-colors duration-150 hover:text-[#111827]">
-              Writing
-            </Link>
-            <a
-              href="https://x.com/the_ray_kar"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors duration-150 hover:text-[#111827]"
-            >
-              Twitter (X)
-            </a>
-            <a
-              href="https://linkedin.com/in/pranav-darekar"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors duration-150 hover:text-[#111827]"
-            >
-              LinkedIn
+        <footer>
+          <div className="rounded-2xl border border-[#F5D0FE] bg-gradient-to-b from-[#FDF4FF] to-white p-6">
+            <p className="text-[18px] font-semibold tracking-[-0.01em] text-[#111827]">
+              Building AI agents and need the infra to hold up?
+            </p>
+            <p className="mt-1 text-[15px] leading-relaxed text-[#6B7280]">
+              I&apos;m open to founding-engineer roles and select contract work. Say hello.
+            </p>
+            <a href={`mailto:${EMAIL}`} className="editorial-link mt-4 inline-block text-[16px]">
+              Message me <span className="arrow">→</span>
             </a>
           </div>
+          <div className="mt-8 flex flex-col gap-3 border-t border-[#ECECED] pt-6 text-[14px] text-[#6B7280] sm:flex-row sm:items-center sm:justify-between">
+            <p>Pune, India — perfect weather for a long build :)</p>
+            <div className="flex items-center gap-5 font-medium">
+              {ELSEWHERE.filter((e) => e.name !== "Email").map((e) => (
+                <a
+                  key={e.name}
+                  href={e.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors duration-150 hover:text-[#111827]"
+                >
+                  {e.name}
+                </a>
+              ))}
+            </div>
+          </div>
+          <p className="mt-4 font-mono text-[12px] text-[#9CA3AF]">© {new Date().getFullYear()} Pranav Darekar</p>
         </footer>
       </main>
     </div>

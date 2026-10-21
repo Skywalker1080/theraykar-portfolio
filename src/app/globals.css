@@ -135,3 +135,326 @@ body {
   overflow-y: hidden;
   padding: 0.5rem 0;
 }
+
+/* Tech stack icons: soft glow at rest; one random icon pops with a speech bubble
+   (timing lives in components/tech-stack-strip.tsx). */
+.stack-icon {
+  filter: drop-shadow(0 0 6px rgba(217, 70, 239, 0.35));
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease;
+}
+.stack-icon.is-popped {
+  transform: translateY(-4px) scale(1.15);
+  filter: drop-shadow(0 0 14px rgba(217, 70, 239, 0.75)) brightness(1.15);
+}
+.stack-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid #f5d0fe;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(217, 70, 239, 0.18);
+  font-size: 13px;
+  line-height: 1.45;
+  color: #6b7280;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+.stack-bubble.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.stack-bubble-tail {
+  position: absolute;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-right: 1px solid #f5d0fe;
+  border-bottom: 1px solid #f5d0fe;
+  transform: rotate(45deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stack-icon, .stack-bubble { transition: opacity 250ms ease; }
+  .stack-icon.is-popped, .stack-bubble, .stack-bubble.is-open { transform: none; }
+}
+
+/* Nav brand: every 14s the name shimmers into the handle for a few seconds, then back.
+   Both labels share one grid cell so the swap never shifts the layout. */
+.brand-swap {
+  display: inline-grid;
+}
+.brand-swap > span {
+  grid-area: 1 / 1;
+  background: linear-gradient(100deg, #111827 40%, #ea00ff 50%, #111827 60%) 100% 0 / 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand-name {
+  animation: brand-name 14s ease-in-out infinite;
+}
+.brand-handle {
+  opacity: 0;
+  animation: brand-handle 14s ease-in-out infinite;
+}
+@keyframes brand-name {
+  0%, 62% { opacity: 1; filter: blur(0); background-position: 100% 0; }
+  66% { opacity: 1; background-position: 0% 0; }
+  70%, 92% { opacity: 0; filter: blur(4px); background-position: 0% 0; }
+  96%, 100% { opacity: 1; filter: blur(0); background-position: 100% 0; }
+}
+@keyframes brand-handle {
+  0%, 66% { opacity: 0; filter: blur(4px); background-position: 100% 0; }
+  70% { opacity: 1; filter: blur(0); background-position: 100% 0; }
+  88% { opacity: 1; background-position: 100% 0; }
+  92% { opacity: 1; background-position: 0% 0; }
+  96%, 100% { opacity: 0; filter: blur(4px); background-position: 0% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-name { animation: none; }
+  .brand-handle { animation: none; opacity: 0; }
+}
+
+/* Hero focus pipeline: one stage active at a time plays a tiny operation, then hands
+   off to the next (timing in components/focus-pipeline.tsx). Idle stages stay dimmed. */
+.op-stage {
+  opacity: 0.45;
+  transition: opacity 400ms ease;
+}
+.op-stage.is-active,
+.op-stage.is-done {
+  opacity: 1;
+}
+.op-status {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.op-stage.is-active .op-status {
+  opacity: 1;
+}
+.op-viz {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+}
+.op-viz i {
+  display: block;
+  font-style: normal;
+  background: #ececed;
+  border-radius: 2px;
+}
+.op-stage.is-active .op-viz i,
+.op-stage.is-done .op-viz i {
+  background: linear-gradient(180deg, #f4adff, #ea00ff);
+}
+/* data: three rows streaming in from the left */
+.op-data { flex-direction: column; align-items: flex-start; justify-content: center; }
+.op-data i { height: 4px; width: 40px; transform-origin: left; }
+.is-active .op-data i { animation: op-stream 0.9s ease-out both; }
+@keyframes op-stream { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* build: blocks stacking up into a service */
+.op-build i { width: 10px; height: 18px; }
+.op-build i:nth-child(2) { height: 12px; }
+.op-build i:nth-child(3) { height: 22px; }
+.is-active .op-build i { animation: op-stack 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes op-stack { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* eval: checks ticking one by one */
+.op-eval { align-items: center; }
+.op-eval i { width: 16px; height: 16px; font-size: 10px; line-height: 16px; text-align: center; color: #fff; border-radius: 9999px; }
+.is-active .op-eval i { animation: op-tick 0.4s ease-out both; }
+@keyframes op-tick { from { transform: scale(0.3); opacity: 0; } to { transform: none; opacity: 1; } }
+/* deploy: a progress bar filling to live */
+.op-deploy { align-items: center; }
+.op-deploy i { height: 6px; width: 52px; border-radius: 9999px; transform-origin: left; }
+.is-active .op-deploy i { animation: op-stream 1.6s ease-in-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .op-viz i { animation: none !important; }
+}
+
+
+/* Experience dropdown: the hint gently pulses while closed, and the panel slides in on open. */
+.exp-details:not([open]) .exp-hint {
+  animation: exp-nudge 2.4s ease-in-out infinite;
+}
+@keyframes exp-nudge {
+  0%, 100% { opacity: 0.6; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(1px); }
+}
+.exp-details[open] .exp-panel,
+.nerds[open] .exp-panel {
+  animation: exp-open 300ms ease-out;
+}
+@keyframes exp-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .exp-details .exp-hint, .exp-details .exp-panel { animation: none; }
+}
+
+/* Recent Work teaser: the "See how I built it" hint pulses gently to invite a click. */
+.sub-hint {
+  animation: exp-nudge 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-hint { animation: none; }
+}
+
+/* Project glyphs (components/project-glyph.tsx): small looping animations per project kind. */
+.glyph-product .g-dot { animation: g-type 1.4s ease-in-out infinite; }
+.glyph-product .g-dot:nth-child(4) { animation-delay: 0.2s; }
+.glyph-product .g-dot:nth-child(5) { animation-delay: 0.4s; }
+@keyframes g-type { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+
+.glyph-agent .g-row { transform-box: fill-box; transform-origin: left; animation: g-row 2.4s ease-out infinite; }
+.glyph-agent .g-row:nth-child(3) { animation-delay: 0.25s; }
+.glyph-agent .g-row:nth-child(4) { animation-delay: 0.5s; }
+@keyframes g-row { 0% { transform: scaleX(0); opacity: 0; } 25%, 80% { transform: scaleX(1); opacity: 1; } 100% { opacity: 0; } }
+
+.glyph-ml .g-line { stroke-dasharray: 1; animation: g-draw 2.6s ease-in-out infinite; }
+.glyph-ml .g-tip { animation: g-tip 2.6s ease-in-out infinite; }
+@keyframes g-draw { 0% { stroke-dashoffset: 1; } 55%, 85% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; opacity: 0.2; } }
+@keyframes g-tip { 0%, 45% { opacity: 0; } 55%, 85% { opacity: 1; } 100% { opacity: 0; } }
+
+.glyph-data .g-packet { animation: g-flow 1.8s linear infinite; }
+.glyph-data .g-fill { animation: g-pulse 1.8s ease-in-out infinite; }
+@keyframes g-flow { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } 80% { transform: translateX(14px); opacity: 1; } 100% { transform: translateX(16px); opacity: 0; } }
+@keyframes g-pulse { 0%, 70% { opacity: 0.35; } 85% { opacity: 1; } 100% { opacity: 0.35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .glyph * { animation: none !important; }
+}
+
+/* Architecture diagrams (components/arch-diagram.tsx). The highlight and the packet use the
+   same cycle (stages × 1.4s, set inline) so they step through the flow together. */
+.arch-block {
+  animation-name: arch-active;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes arch-active {
+  0%, 22%, 100% { border-color: #ececed; box-shadow: none; }
+  6%, 16% { border-color: #f0abfc; box-shadow: 0 0 0 3px #fdf4ff, 0 4px 14px rgba(234, 0, 255, 0.12); }
+}
+.arch-link {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 14px;
+  background: #e5e7eb;
+}
+.arch-link::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #ea00ff;
+  opacity: 0;
+  /* duration and delay are set inline on .arch-link and inherited here */
+  animation: arch-packet-v linear infinite;
+  animation-duration: inherit;
+  animation-delay: inherit;
+}
+@media (min-width: 640px) {
+  .arch-link { width: 18px; height: 1px; }
+  .arch-link::after { top: -2px; left: 0; animation-name: arch-packet-h; }
+}
+@keyframes arch-packet-v {
+  0% { top: 0; opacity: 1; }
+  10% { top: 10px; opacity: 1; }
+  11%, 100% { opacity: 0; }
+}
+@keyframes arch-packet-h {
+  0% { left: 0; opacity: 1; }
+  10% { left: 14px; opacity: 1; }
+  11%, 100% { opacity: 0; }
+}
+
+/* Stage glyphs */
+.sg-ring { transform-origin: 9px 9px; animation: sg-ring 1.8s ease-out infinite; }
+@keyframes sg-ring { from { transform: scale(0.4); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+.sg-spin { transform-origin: 9px 9px; animation: sg-spin 3s linear infinite; }
+@keyframes sg-spin { to { transform: rotate(360deg); } }
+.sg-node { animation: sg-blink 1.5s ease-in-out infinite; }
+.sg-node:nth-child(2) { animation-delay: 0.3s; }
+.sg-node:nth-child(3) { animation-delay: 0.6s; }
+.sg-fill, .sg-blink { animation: sg-blink 1.4s ease-in-out infinite; }
+@keyframes sg-blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+.sg-tick { stroke-dasharray: 1; animation: sg-tick 2s ease-in-out infinite; }
+@keyframes sg-tick { 0% { stroke-dashoffset: 1; } 50%, 90% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; opacity: 0.3; } }
+.sg-twinkle { transform-origin: 9px 9px; animation: sg-twinkle 2s ease-in-out infinite; }
+@keyframes sg-twinkle { 0%, 100% { transform: scale(0.7) rotate(0deg); opacity: 0.6; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+.sg-right { animation: sg-right 1.6s ease-in-out infinite; }
+.sg-left { animation: sg-left 1.6s ease-in-out infinite; }
+@keyframes sg-right { 0%, 100% { transform: translateX(-1px); } 50% { transform: translateX(1px); } }
+@keyframes sg-left { 0%, 100% { transform: translateX(1px); } 50% { transform: translateX(-1px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .arch-block, .arch-link::after, .sg * { animation: none !important; }
+}
+
+/* Beyond Work stickers: each sits at a slight tilt (--tilt, set inline) and straightens,
+   lifts and gets a pink glow on hover; the glyph bobs gently on its own. */
+.beyond-sticker {
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 250ms ease, border-color 250ms ease;
+}
+.beyond-sticker:hover {
+  transform: rotate(0deg) translateY(-4px);
+  border-color: #f5d0fe;
+  box-shadow: 0 10px 24px rgba(217, 70, 239, 0.14);
+}
+.beyond-glyph {
+  animation: beyond-bob 3.2s ease-in-out infinite;
+}
+.beyond-sticker:nth-child(2) .beyond-glyph { animation-delay: 0.6s; }
+.beyond-sticker:nth-child(3) .beyond-glyph { animation-delay: 1.2s; }
+.beyond-sticker:nth-child(4) .beyond-glyph { animation-delay: 1.8s; }
+.beyond-sticker:nth-child(5) .beyond-glyph { animation-delay: 2.4s; }
+@keyframes beyond-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .beyond-sticker, .beyond-glyph { animation: none; transition: none; }
+}
+
+/* Hobby glyphs (components/hobby-glyph.tsx) */
+.hg-btn { animation: sg-blink 1.2s ease-in-out infinite; }
+.hg-btn:nth-of-type(2) { animation-delay: 0.6s; }
+.hg-lift { animation: hg-lift 1.8s ease-in-out infinite; }
+@keyframes hg-lift { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-3px); } }
+.hg-page { transform-origin: 22px 22px; animation: hg-page 2.6s ease-in-out infinite; }
+@keyframes hg-page { 0%, 30% { transform: scaleX(1); opacity: 1; } 55% { transform: scaleX(-1); opacity: 0.4; } 60%, 100% { transform: scaleX(-1); opacity: 0; } }
+.hg-wheel { animation: sg-spin 1.6s linear infinite; }
+.hg-steam { animation: hg-steam 2s ease-out infinite; }
+.hg-steam:nth-of-type(4) { animation-delay: 0.5s; }
+.hg-steam:nth-of-type(5) { animation-delay: 1s; }
+@keyframes hg-steam { 0% { transform: translateY(3px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(-3px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .hg * { animation: none !important; }
+}
+
+/* Now HUD (components/now-hud.tsx): reading bar filling in, training days popping in,
+   a blinking terminal cursor, and the Claude mascot doing a little hop. */
+.now-fill { transform-origin: left; animation: now-fill 1.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes now-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.now-claude { animation: now-claude 6s ease-in-out infinite; filter: drop-shadow(0 0 4px rgba(217, 70, 239, 0.35)); }
+@keyframes now-claude { 0%, 70%, 100% { transform: translateY(0); } 78% { transform: translateY(-4px); } 86% { transform: translateY(0); } 92% { transform: translateY(-2px); } }
+.now-day { animation: now-day 400ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes now-day { from { transform: scale(0.5); opacity: 0; } to { transform: none; opacity: 1; } }
+.now-cursor { animation: now-cursor 1s steps(1) infinite; }
+@keyframes now-cursor { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .now-fill, .now-day, .now-cursor, .now-claude { animation: none; }
+}

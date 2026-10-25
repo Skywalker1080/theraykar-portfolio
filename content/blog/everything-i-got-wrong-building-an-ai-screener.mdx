@@ -1,0 +1,360 @@
+---
+title: "Everything I Got Wrong Building an AI Screener"
+date: "2026-10-26"
+description: "The full build log of CPIO, Crypto Prism's natural-language screener agent. The mistakes I made in the order I made them, what each one cost, and what it taught me: prompt bloat, evals that lied, retry latency, the move off SQL, and a review that called it unsafe."
+---
+
+This is the long version of the story I've been sharing in pieces on LinkedIn: building CPIO, the agent at Crypto Prism that turns a trader's sentence into a ranked list of coins, on top of 30+ production tables.
+
+It isn't a tutorial. It's a build log of the mistakes I made, in the order I made them, what each one cost, and what it taught me.
+
+The short version: my first version answered 2 out of 10 complex questions correctly. The version traders use today doesn't write SQL and doesn't know a single table name. It answers in about 20 seconds, behind auth, with its generated code running in a locked-down sandbox. The model behind it is about as capable as it was then. What changed was the job I gave it: **the LLM declares what data it needs, and deterministic code does everything that touches the database.**
+
+Getting there took two architectures, two golden sets, a cloud migration and one architecture review that told me my agent wasn't safe to expose. For each stage I'll cover what I built, why, how, and where it broke.
+
+The interesting part of AI products is rarely the model. It's the boring parts around it: evals, guardrails, data contracts, retries, sandboxes, deployment, the things that decide whether a demo survives real users. That's the work I like doing, and it's most of what this article is about.
+
+---
+
+## The problem: traders don't think in filters
+
+Crypto Prism had a working data platform before any of this started. Ingestion pipelines, 30+ production tables, more than a billion data points generated a day, technical indicators and trading signals already computed.
+
+We also had a classic screener: dropdowns and sliders for RSI, market cap, volume, signals. It served one kind of user well, the one who already speaks the jargon.
+
+Most traders don't. When I talked to our beta users, they didn't ask for more filters. They wanted to *describe* the coins they were looking for and let the platform find them. "Large caps that are oversold but still trending up." "Coins breaking out with rising volume." **32 of our 40 beta users said this would make their life simpler**, including the advanced users who knew every filter by name.
+
+My founder and I were looking for an edge. Everyone around us was bolting AI agents onto their products, and nobody in crypto was doing natural-language screening yet. We had the data. The question was whether I could build the bridge between a sentence and a correct answer on production data.
+
+I had never built an agent like this before.
+
+---
+
+## Version 1: natural language → SQL
+
+### What
+
+The first-principles version is simple. A user types a sentence. An LLM understands it and writes SQL. The SQL runs against the database. Rows come back.
+
+I built it as a LangGraph pipeline: parse the intent, retrieve the schema, generate SQL, validate it, execute it, format the response. If validation or execution failed, the error went back to the model for another attempt, up to 3 retries.
+
+### Why
+
+SQL was the obvious choice. The data already lived in Postgres, the indicators were already computed, and a screener *is* a filter-and-rank query. No new infrastructure, no new execution environment. The shortest path from sentence to rows.
+
+### How: the guardrails came first
+
+Before the agent answered a single question, I built the validator. I didn't want to trust an LLM with a production database, so every generated query went through a layered check using an AST parser (sqlglot):
+
+- strip comments, reject multiple statements
+- parse it, and require exactly one `SELECT`. Anything that writes, alters, drops or opens a transaction is rejected.
+- block system catalogs and schema introspection tables
+- check every table against a whitelist
+- inject or clamp a `LIMIT` of 100 rows
+
+On top of that, every connection ran as a read-only session with a 30-second statement timeout. The cheapest time to build a guardrail is before you need it.
+
+### Where it broke, part 1: the model couldn't see the database
+
+The core question was: how does the model know what tables exist, what they hold and what each column means?
+
+My first answer was a router file, `router.md`. It was a document that explained each table, its columns and when to use it. It was already big when I started testing.
+
+And testing went badly. The agent failed on simple queries. Every time it made a new mistake, I added a new instruction to `router.md`: *when the user asks about X, use table Y.* *Never read prices from this table.* *"Blue chip" means this.*
+
+The file grew to **358 lines and 25 KB**. Each fix worked for the case in front of me and made the next case worse, because the model now had more rules to weigh and more ways to pick the wrong one.
+
+I'd call this the prompt-patching treadmill. **When fixes keep landing in the prompt, the problem isn't the prompt.**
+
+### Where it broke, part 2: half the "LLM mistakes" were mine
+
+When I went through the failures one by one, a pattern showed up. Most of them weren't reasoning failures. They were *data-contract* failures:
+
+- Some table names started with a digit, and the parser choked on them. One table name contained another as a substring, so my own quoting logic matched the wrong one.
+- Columns had inconsistent casing. The model wrote `durability_score`, the column was `Durability_Score`, and each mismatch burned a retry.
+- A signal-direction column was a `smallint` (-1, 0, 1), but my documentation described it as "Buy" and "Sell". The model faithfully wrote `direction = 'Buy'`.
+- A column the router told it to filter on (`is_active`) wasn't populated at all, so the filter returned 0 rows.
+- I had a rolling 108-day price table for fast queries and a full-history price table, and the model kept mixing them up on timestamps.
+
+The model was doing exactly what my schema and docs told it to do. The schema and docs were wrong or ambiguous. **An agent is a very fast, very literal reader of your data layer, and it finds every inconsistency you've been living with.**
+
+---
+
+## Stepping back: what can this data actually answer?
+
+At some point I stopped patching and asked a different question. Forget the agent: **what kinds of questions can our database answer at all?**
+
+I wrote it down. It came out to about a dozen categories: fundamentals and ratios, technical indicators, candlestick patterns, ML signals, price action over windows, and so on. Anything outside those categories couldn't be answered correctly however good the model was, because the data didn't exist.
+
+This one document changed the shape of the problem. A vague "make the agent smarter" became a bounded space: these categories, these tables, these columns. Every later decision, from evals to routing to the final architecture, was built on it.
+
+**Define the space your system can answer before you teach a model to answer it.**
+
+---
+
+## Flying blind, then a scoreboard that lied
+
+### What
+
+A golden set: real-looking questions, each with a known-correct answer, scored every time the agent changes.
+
+### Why
+
+Without one, every prompt change was a vibe check. I'd fix one query, break two others and not notice for days.
+
+### How (attempt 1)
+
+Our database was on GCP at the time, and BigQuery ships with its own SQL agent. I used it to generate a realistic golden set: questions across each category with SQL it wrote. Later I added complex mixed questions that cross categories.
+
+The first real scores:
+
+- **6/10 on simple questions per category**
+- **2/10 on complex, mixed questions**
+
+Now I knew where I stood. Simple questions were improving. Complex ones, joining several tables and several columns, were where the agent fell apart, mostly by **picking the wrong table at the wrong time** inside a bloated instruction set.
+
+### Where it broke: my oracle had my blind spots
+
+The BigQuery agent wasn't 100% accurate either. It made the *same* timestamp mistake as my agent, confusing the 108-day table with full history. A golden set generated by a model that shares your agent's failure modes will happily mark wrong answers as right.
+
+**Your eval oracle has to be stronger than the system it grades, or at least wrong in different places.**
+
+### How (attempt 2)
+
+I rebuilt the golden set: 50 questions covering complex, multi-column, multi-table queries across every category, generated with Claude Opus 4.8. Then I extended it with real beta-user traces. For each run that failed, I had Claude diagnose where it went wrong and write the correct SQL against our actual database.
+
+That gave me a test set covering both the happy path and the unhappy one, built partly from what real users actually typed.
+
+---
+
+## Giving the model less, not more
+
+With a real scoreboard, the router problem was easy to see. I was giving the model everything up front and hoping it picked the right part.
+
+I flipped it:
+
+- **`router.md` shrank to a simple map:** this category of question → these tables and columns.
+- **A schema tool** returned column descriptions and *data types* on demand, only for the columns the agent asked about. Wrong data types had been a repeat mistake, so types became part of the answer.
+- **I cut the tables the agent could see from 56 to 34.** 22 tables were never relevant to screening, and every one of them was another way to be wrong.
+- Tables were tagged as **snapshot** (one row per coin, no timestamp filter needed) or **time-series** (filter by date), which killed a whole class of timestamp bugs.
+
+The golden set moved from roughly 2 in 10 on complex queries to **39 out of 50 overall.**
+
+---
+
+## The determinism ratchet
+
+Some failures didn't respond to better context at all. They were judgment calls the model kept making differently from what a trader means:
+
+- "Blue chip" → the model chose top 50 by market cap. Traders mean top 10.
+- One ML signal fires on about **0.78% of rows**. Asked for coins with that signal "today", the model queried a single day and got 0 rows almost every time.
+- "Double bottom in altcoins" had no pattern table behind it, so the model *quietly answered from an unrelated table* and returned 100 rows of nonsense.
+
+The fix each time was to **take the decision away from the LLM**:
+
+- Regex-based keyword constraints forced the correct market-cap tiers before the model ever saw the query.
+- Rare signals got a forced 7-day window in code.
+- When no table could answer a question, the agent had to say so explicitly (`NO_TABLE_AVAILABLE`) and offer "did you mean" alternatives, never substitute silently.
+- If the intent was ambiguous (confidence below **0.75**, or a required detail missing), the agent stopped and asked the user a clarifying question before writing anything. Human in the loop, by design.
+
+Looking back, this is the pattern of the whole project. Every version took one more decision away from the model and gave it to deterministic code. I didn't plan it that way. The evidence kept pointing there.
+
+---
+
+## 90 seconds, and most of it was the model fixing itself
+
+### Where it broke
+
+Accuracy was getting there. Speed wasn't. Easy queries took **30–40 seconds**. Complex ones took **60–90 seconds**.
+
+When I traced it, the model wasn't slow at thinking. **The retry loop was the latency.** A wrong first SQL meant an error, then a second generation, sometimes a third, and each round trip added the full cost of an LLM call plus a query.
+
+### How
+
+Two levers. First, keep pushing first-pass accuracy (everything above), because a query that's right the first time never pays the retry tax. Second, model shopping: I moved from a local Qwen model and Claude Sonnet to Gemini Flash, and kept measuring.
+
+One lesson from that phase: at one point, intent parsing took ~50 seconds and I assumed the prompt was too big. It was the free-tier API rate limit, with the client quietly backing off on 429s. **Measure before you blame.**
+
+### Launch
+
+With the validator, read-only sessions, statement timeouts, the table whitelist, clarifying questions and alternatives in place, the SQL agent went to production for our private beta. Most queries returned in about **40 seconds**.
+
+I made a deliberate trade-off at this point. Running an LLM-driven system against a production database carries prompt-injection risk. The beta was internal team members, friends and trusted early users, so I put deeper security work behind accuracy, and said so out loud. That debt was real, and I paid it later (more below).
+
+---
+
+## Where SQL hit the ceiling
+
+The platform kept growing: ML model signals, news sentiment, on-chain analytics, more indicators, candlestick patterns. And I watched the bottleneck I'd expected all along arrive.
+
+**SQL itself was the ceiling.** Not because the model was bad at it, but because of what traders were asking for:
+
+- *Year-over-year* changes, multi-period deltas, *EMA crossovers*: possible in SQL, but painful, and the model got them wrong in creative ways.
+- Questions that touched a column from almost every table turned into giant joins that were slow and fragile.
+- Anything we hadn't precomputed, like a custom indicator or a different window, was simply impossible.
+
+And every new table made the router bigger again. The prompt was growing with the schema, which is exactly the curve you don't want.
+
+The alternative was obvious: Python. What held me back was a belief I'd never examined, that Python would be too slow for this. When I actually reasoned it through, the case flipped:
+
+- LLMs, including open models, were far better at writing Python than SQL.
+- **pandas** and **TA-Lib** meant any indicator could be computed at runtime, even one that wasn't in our database.
+- Python gave me flexibility SQL couldn't: loops, windows, custom logic per coin.
+
+The "slow" part turned out to be wrong too. When I profiled the new system later, executing the code wasn't the bottleneck. Generating it was.
+
+---
+
+## Version 2: the LLM declares, the code fetches
+
+### What
+
+The core idea fits in one sentence: **the LLM never touches the database, and never needs to know a single table name.**
+
+Instead of writing a query, the model writes a small Python program against a fixed contract. It *declares* what data it needs, and deterministic code fetches exactly that.
+
+### Why
+
+Every failure class from Version 1 came from the model having to understand our storage: names, casing, types, joins, which table holds what. If the model never sees storage, all of those bugs disappear by construction. And the prompt stops growing with the schema, because the model only sees a stable set of datasets, not 34 tables.
+
+### How
+
+The pipeline:
+
+```
+user query
+   │
+   ▼
+parse_intent ── is it a screener? confidence, missing details, ambiguities
+   │   └─ low confidence → clarify (ask the user, then resume)
+   ▼
+plan_execution ── a short methodology the user can see
+   ▼
+generate_code ── declares needs + writes two functions against a fixed contract
+   ▼
+validate_code ── AST checks: allowed imports, banned calls, required functions
+   ▼
+execute ── fetch declared datasets → 5-coin smoke run → full run (sandboxed)
+   │   └─ crash → repair loop (max 2) with the error fed back
+   ▼
+results ── or, on 0 rows, three "did you mean" alternatives
+```
+
+The contract is the heart of it. Every generated program starts with a metadata line:
+
+```python
+# AGENT-META: {"needs": ["fundamental", "indicators"], "needs_historical": true, "candles": 90, "interval": "1d"}
+```
+
+Then two functions with fixed signatures: one that evaluates a single coin, and one `main` that runs it across the universe and returns rows, filtered results, exceptions and a summary.
+
+The data layer is a **registry**. Each dataset (fundamentals, technicals, indicators, ML signals, price history) has hand-written, tested SQL behind it. The model only names the datasets it wants. The registry validates those names against a whitelist and fetches the data. The universe (top 100, top 500 or all 1,000 coins by market cap) is resolved in code too.
+
+The guardrails moved with the architecture. The SQL validator became a **Python AST validator**: an import allowlist (pandas, numpy, TA-Lib, math, datetime and a few others), banned modules (`os`, `subprocess`, `socket`, network libraries), banned calls (`eval`, `exec`, `open`, `getattr`, `__import__`), and no dunder access.
+
+A **5-coin smoke run** happens before the full run. If the code crashes, it crashes on 5 coins in a second instead of on 1,000. The error goes back to the model for a repair, at most twice.
+
+### Where it broke: live testing humbled me
+
+The unit tests passed. They were also entirely mock-based, and live traffic found what mocks couldn't:
+
+- **Every query returned 0 rows.** The `AGENT-META` channel wasn't declared in the graph state, so LangGraph silently dropped it. No error, just nothing.
+- **A sandbox escape.** My first version ran `main()` in-process, and `getattr` could reach real builtins. I moved execution into a subprocess with a stripped environment, so no database credentials or API keys ever reach generated code.
+- **A crash that only happened in production.** Numeric libraries spin up thread pools, and under the memory limit they ran out of address space. 40 of 100 coins completed, then "No coins match". It never reproduced on my Windows machine.
+- **Wrong RSI.** Our RSI columns are named by their EMA span, so the standard RSI-14 lives in a column named for 27. The model picked the obvious name and reported BTC's RSI as 51.57 instead of 58.86.
+- **A breakout that could never fire.** The 3-month high included the current candle, so the price could never exceed it.
+- **"0 of 0 analyzed".** The prompt said `rank`, the data said `cmc_rank`.
+
+The last three are worth pausing on. The code ran. It returned rows. It was **financially wrong**. Correctness in a domain like trading is its own test category, and no syntax check catches it.
+
+---
+
+## Deploying it: GCP → AWS
+
+### What and why
+
+Version 1 ran on Cloud Run. During the rewrite we moved our infrastructure to AWS, and I deployed the agent on **App Runner**, with images in **ECR**.
+
+The reasoning was team size. App Runner gives you a container, HTTPS, autoscaling and deploys with almost no operational surface. For a founding engineer who is also the data, backend and AI person, that's the right trade.
+
+### How
+
+- GitHub Actions authenticates to AWS through **OIDC**, so there are no long-lived keys in CI.
+- Every push builds an image tagged with the commit SHA, pushes it to ECR, and App Runner deploys it.
+- Secrets live in **AWS Secrets Manager** and are injected at runtime. The database is RDS over SSL.
+- Tracing went to LangSmith, and later **Langfuse**, grouped by session, so every user run can be replayed step by step.
+
+### Where it breaks
+
+Managed simplicity has edges, and I hit them:
+
+- App Runner caps a request at **120 seconds**. An agent that sometimes needed to generate, validate, smoke-test, run and repair had to finish inside that window or fail.
+- Clarifying questions pause the graph and resume later. My first checkpointer was a local SQLite file, which meant a resume landing on a different instance, or after a deploy, found nothing.
+- The container ran a single process, and the default concurrency settings meant it would never scale out under the load we expected.
+
+---
+
+## The review that said "not safe to expose"
+
+On 8 October I ran a full architecture review of the agent: code-level, every finding verified against the source. The first line of the verdict was the one you don't want: **it works for one user on the happy path, and it is not safe to expose.**
+
+The numbers it measured:
+
+- **Single-user latency: p50 22s, p95 56s** (38 runs)
+- Intent 4.2s · plan 4.0s · **code generation 16.9s** · fetch ~6s · execution ~9s
+- Under concurrency, it would break at around **10–15 simultaneous users**. Two execution slots, cold-starting Python interpreters that each imported pandas and TA-Lib, queued requests past App Runner's 120-second limit.
+
+The findings fell into three groups.
+
+**Security.** My sandbox was enforced in Python, not by the operating system. An AST check is a *filter*, not a *boundary*. The endpoint had no auth or rate limit, and session IDs came from the client.
+
+**Reliability.** Failures were silent or mislabelled. A database outage came back to the user as "did you mean...?" suggestions. A valid screen with 0 matches was diagnosed as a routing failure, because the tail of the graph still read fields from the SQL era that nothing wrote anymore.
+
+**Scale.** An unbounded price-history prefetch on a ~2.5M-row table, LLM calls with no timeout (the SDK default is 10 minutes), and a checkpointer pinned to one instance.
+
+### How I fixed it
+
+- **The OS is now the boundary.** Generated code runs in its own locked-down runtime: no network, no credentials, its own unprivileged identity. The AST validator stays as defense in depth.
+- **No more unpickling untrusted output.** Results come back from the sandbox as JSON only.
+- **Auth, rate limits and server-issued sessions.** Every request is authenticated, rate-limited per user, and session IDs are generated server-side and bound to the user.
+- **Deadlines everywhere.** 45-second LLM timeouts, a 110-second request deadline under the platform's 120-second cap, one execution-slot acquisition with a deadline, and work cancelled when a client disconnects.
+- **Typed outcomes instead of error strings.** `ok | rejected | zero_rows | data_unavailable | codegen_invalid | runtime_crash`. A database outage now reads as an outage, and 0 rows reads as 0 rows.
+- **Sessions in Postgres**, so a clarification can resume on any instance and survive a deploy.
+- **One dataset registry as the single source of truth.** Each dataset is described once, and the prompt and contract text are generated from it. Before, the same dataset was described in four places that had already drifted apart.
+- **Bounded, parallel data fetches**, and a warm worker pool with pandas and TA-Lib preloaded, so a run doesn't cold-start eight interpreters.
+
+After the first hardening pass, production queries came back in around **20 seconds**, against 40 seconds for the SQL version at launch, with a much larger question space.
+
+---
+
+## What these mistakes taught me
+
+**I patched the prompt for weeks before questioning the structure.** 358 lines of `router.md` felt like progress at the time. It was a symptom. The real fix was upstream: write down what the data could answer, then shrink what the model sees.
+
+**I blamed the model for my own schema.** Digit-prefixed names, inconsistent casing, a smallint documented as "Buy", a column nobody populated. The model was reading my data layer faithfully. My data layer wasn't telling the truth.
+
+**I never planned the determinism ratchet. The evidence kept pushing me there.** Every time the model kept making a judgment call I could encode (a market-cap tier, a time window, a refusal), I encoded it. Far enough down that road, the model stopped doing the work and started declaring it.
+
+**My first golden set shared my agent's blind spots.** It came from a model that made the same timestamp mistake. The set that worked came from a stronger model plus real user traces, and it included the unhappy path.
+
+**I treated retries as reliability. They were my latency.** Every point of first-pass accuracy saved more time than tuning the retry loop ever did.
+
+**The failures that hurt most were the quiet ones.** Zero rows from a dropped state channel, an empty dict for a missing column, an outage dressed up as "did you mean". Each one looked like a working system until someone checked.
+
+**I thought my validator was my sandbox.** An AST check stops honest mistakes. Only the operating system stops everything else.
+
+**My mocks passed while production failed.** The bugs that mattered (the dropped channel, the prod-only memory crash, the wrong RSI) only showed up on real data and real infrastructure.
+
+---
+
+## Where it still breaks
+
+It isn't finished, and I'd distrust any post that says otherwise.
+
+- **Code generation is the critical path.** 16.9 of the 22 seconds was the model writing code. Cutting that is the next big latency win.
+- **Evals are moving from offline to continuous.** The next step is scoring real production traces in Langfuse against a frozen data snapshot, with evaluators that recompute each answer independently, and gating deploys on it.
+- **Domain correctness needs its own tests.** RSI and breakout bugs taught me that "runs and returns rows" isn't the bar. "Matches what a trader would compute by hand" is.
+
+The next article goes one layer down: **the agent harness from first principles**, meaning the loop of intent → plan → generate → validate → execute → repair that sits under all of this, and why each piece exists.
+
+If you're building agents on top of real production data, I'd like to hear where yours broke. And if you're a founder wondering whether your AI feature will survive real users, the boring parts are where that gets decided.

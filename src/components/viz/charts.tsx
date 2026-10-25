@@ -65,15 +65,22 @@ export function DotGrid({
 
 type Mismatch = { wrote: string; actual: string; result: string };
 
-/* What the model wrote next to what the data layer actually held. A highlight walks the rows. */
-export function MismatchTable({ rows }: { rows: Mismatch[] }) {
+/* Two versions of the same thing side by side (what the model wrote vs. what the data held,
+   what's stored vs. what's sent), with the consequence. A highlight walks the rows. */
+export function MismatchTable({
+  rows,
+  headers = ["Model wrote", "Data layer had", "What happened"],
+}: {
+  rows: Mismatch[];
+  headers?: [string, string, string];
+}) {
   const cycle = `${rows.length * 1.8}s`;
   return (
     <div className="text-[13px]">
       <div className="hidden grid-cols-[1fr_1fr_1.2fr] gap-3 px-2.5 pb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[#9CA3AF] sm:grid">
-        <span>Model wrote</span>
-        <span>Data layer had</span>
-        <span>What happened</span>
+        {headers.map((h) => (
+          <span key={h}>{h}</span>
+        ))}
       </div>
       <ul className="space-y-1.5">
         {rows.map((r, i) => (

@@ -4,7 +4,7 @@ import { toolLogo } from "@/lib/tools";
 /* Post-level diagrams built from the same parts as ArchDiagram: white blocks on hairline
    borders, the animated stage glyphs, tech-stack logos, and pink packets on the connectors. */
 
-function Block({
+export function Block({
   kind,
   title,
   tool,

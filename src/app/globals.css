@@ -110,6 +110,11 @@ body {
   letter-spacing: -0.02em;
 }
 
+/* Fences without a language skip rehype-pretty-code; they still must scroll, not widen the page. */
+.blog-prose pre {
+  overflow-x: auto;
+}
+
 .blog-prose [data-rehype-pretty-code-figure] pre {
   overflow-x: auto;
   padding: 1rem;
@@ -789,4 +794,57 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .id-chip, .hub-wire i, .cj-issued { animation: none !important; }
   .id-cell, .race-row, .tick { transition: none; }
+}
+
+/* Agent-harness visualizations (components/viz/agent.tsx) */
+.cyc-node { border-color: #ececed; transition: border-color 300ms ease, box-shadow 300ms ease; }
+.cyc-node.is-active { border-color: #f0abfc; box-shadow: 0 0 0 3px #fdf4ff, 0 4px 14px rgba(234, 0, 255, 0.12); }
+
+.tr-msg {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid #ececed;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+.tr-assistant { border-color: #f0abfc; background: #fdf4ff; font-family: var(--font-mono); font-size: 12px; }
+.tr-tool { font-family: var(--font-mono); font-size: 12px; color: #4b5563; }
+.tr-msg.is-error { border-color: #fda4af; background: #fff1f2; color: #e11d48; }
+
+.ev-chip {
+  padding: 2px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #4b5563;
+  animation: op-tick 0.3s ease-out both;
+}
+.ev-chip.is-done { border-color: transparent; background: linear-gradient(90deg, #f4adff, #ea00ff); color: #fff; }
+.ev-chip.is-error { border-color: #fda4af; background: #fff1f2; color: #e11d48; }
+
+.lr-summary {
+  border: 1px solid #f0abfc;
+  background: #fdf4ff;
+  color: #111827;
+  animation: exp-open 400ms ease-out;
+}
+
+.cm-seg { display: block; height: 100%; transition: width 400ms ease; }
+.cm-seg + .cm-seg { box-shadow: inset 1px 0 0 #fff; }
+.cm-user { background: #111827; }
+.cm-assistant { background: #f0abfc; }
+.cm-tool { background: #d1d5db; }
+.cm-summary { background: linear-gradient(90deg, #f4adff, #ea00ff); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cyc-node, .cm-seg { transition: none; }
+  .ev-chip, .lr-summary { animation: none; }
 }

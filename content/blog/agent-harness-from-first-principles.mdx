@@ -1,0 +1,422 @@
+---
+title: "Every AI Agent Is a Loop. The Harness Is Everything Else."
+date: "2026-10-27"
+description: "Designing a basic agent harness from first principles: the agent loop, one interface for every model provider, message transforms, compaction, and switching models mid-session. What each piece is, why it exists, how to build it, and where it breaks."
+---
+
+A language model can't do anything. It takes text in and returns text out. It can't read a file, run a command, or remember what it said yesterday.
+
+Yet every coding agent you've used reads files, runs commands, recovers from errors and keeps working for hours. All of that comes from the code wrapped around the model: **the harness**.
+
+Most people meet the harness through a framework, which hides it. This post builds it from first principles instead, starting from what has to be true and adding only the pieces that are essential:
+
+1. **The agent loop**, which turns a text predictor into something that acts
+2. **One interface for every model provider**, so you're not locked to a vendor
+3. **Message transforms**, which make one conversation history acceptable to any model
+4. **Compaction**, which keeps a long session inside a fixed context window
+5. **Switching models mid-session**, which falls out almost for free once the first four are right
+
+For each one: what it is, why it exists, how to build it, and where it breaks. Advanced pieces (MCP, tool design, plugins, sandboxing and deployment) are part 2.
+
+---
+
+## The one requirement
+
+Start with the constraint:
+
+> The model can only produce text. For it to act, something outside it has to execute what it asks for and feed the result back.
+
+Everything in this post is a consequence of that sentence. The loop exists because one exchange isn't enough. The provider interface exists because different models produce that text in different shapes. Compaction exists because "feed the result back" eventually runs out of room.
+
+---
+
+## 1. The agent loop
+
+### What
+
+The loop asks the model what to do, runs the tools it requests, appends the results to the conversation, and asks again. It stops when the model answers without requesting a tool.
+
+<Viz label="The agent loop" caption="Two laps of tool calls, then a reply with none. The model decides when to stop, not the loop.">
+  <CycleDiagram
+    nodes={[
+      { kind: "model", title: "Call the model", detail: "Conversation so far + available tools" },
+      { kind: "check", title: "Tool calls?", detail: "Did the reply ask for any?", branch: "no → done" },
+      { kind: "process", title: "Run each tool", detail: "In the order requested" },
+      { kind: "store", title: "Append results", detail: "One result per call, linked by id" },
+    ]}
+    path={[0, 1, 2, 3, 0, 1, 2, 3, 0, 1]}
+    done="no tool calls: the model is done"
+  />
+</Viz>
+
+
+### Why
+
+A model call is a single, stateless exchange. A real task like "fix the failing test" takes many steps: read the test, run it, read the code, edit, run again. Each step depends on the last one's output, so the model has to see results before deciding what comes next. The loop is the smallest structure that allows that.
+
+Notice who decides when to stop: **the model**. The loop has no idea whether the task is finished. It just keeps going while the model keeps asking for tools.
+
+### How
+
+First, a message format. Every message, from every model, has the same small shape, plain enough to save to disk and read back later:
+
+```
+Message
+  role          system | user | assistant | tool_result
+  text          what was said
+  thinking      the model's reasoning, if it returned any
+  tool_calls    (id, tool name, arguments) for each call   [assistant]
+  answers_call  id of the tool call it answers             [tool_result]
+  is_error      did this fail?
+  model         which model wrote it                       [assistant]
+  stop_reason   stop | tool_use | length | error
+```
+
+Then the loop itself, in plain pseudocode:
+
+```
+loop:
+    reply = ask the model (conversation so far, available tools)
+    add reply to the conversation
+
+    if the reply failed:             return it   # a failure is a message
+    if the reply has no tool calls:  return it   # the model is done
+
+    for each tool call in the reply, in the order requested:
+        if the reply was cut off by the output limit:
+            result = error "your reply was cut off, re-issue this call"
+        else if no tool has that name:
+            result = error "tool not found"
+        else:
+            try:    result = run the tool with its arguments
+            catch:  result = error with the exception's message
+        add result to the conversation, linked to the call's id
+```
+
+That's the core of every agent. Three design rules are hiding in those lines, and each one is load-bearing.
+
+**Errors are data.** A tool that throws, a tool that doesn't exist, a model call that fails: none of them crash the loop. Each one becomes a message the model can read and react to. A model that sees "FileNotFoundError: config.yaml" will go looking for the right path. A model that never sees the error can't fix anything.
+
+<Viz label="Errors are data" caption="An illustrative session. The failed read isn't an exception. It's the next message, and the model acts on it.">
+  <Transcript messages={[
+    { role: "user", text: "Why does the API fail on startup?" },
+    { role: "assistant", text: "read(path=\"config.yaml\")" },
+    { role: "tool", text: "FileNotFoundError: config.yaml", error: true },
+    { role: "assistant", text: "bash(\"ls conf/\")" },
+    { role: "tool", text: "config.yaml  logging.yaml" },
+    { role: "assistant", text: "read(path=\"conf/config.yaml\")" },
+    { role: "tool", text: "port: \"80a0\"  # ← not a number" },
+    { role: "assistant", text: "The port in conf/config.yaml isn't a number. Fixing it." },
+  ]} />
+</Viz>
+
+
+**Every tool call gets exactly one result, in the order it was requested.** Providers reject a conversation where a tool call has no matching result. Even if tools run in parallel, append their results in request order.
+
+**A cut-off reply fails all its tool calls.** If the model hits its output limit mid-reply (its stop reason is `length`), the arguments of its last tool call may be incomplete but still parse. Running half a file write is worse than running nothing, so the loop refuses them all and tells the model to try again.
+
+### Where it breaks
+
+- **There is no turn limit.** The loop trusts the model to stop. A confused model can call tools forever. A production harness adds a budget (turns, tokens, wall-clock time) as policy around the loop, not inside it.
+- **The user types while it runs.** Interrupting halfway through a batch of tool calls leaves calls without results. The clean answer is two queues. *Steering* messages are delivered after the current tool batch finishes, before the next model call. *Follow-up* messages are delivered only when the agent would otherwise stop.
+- **Exceptions that escape.** If anything throws out of the loop, you lose the turn and often the state. Every failure path has to end up as a message.
+
+---
+
+## 2. One interface for every provider
+
+### What
+
+A single message format and a single streaming contract that the loop talks to, with a thin **adapter** per vendor that translates at the edge.
+
+### Why
+
+Every vendor has its own message schema, streaming format, tool-call rules and authentication. If you store your conversation in one vendor's shape, three things become impossible: switching models, comparing them, and testing your loop without a network.
+
+So the loop never sees a vendor format. It sees your canonical `Message`, and every model looks the same to it.
+
+### How
+
+**Canonical messages.** The `Message` type above is already vendor-neutral. Two fields earn their place. `model` records which model wrote each assistant turn, which matters later when deciding what can be replayed to a different model. And vendor-specific secrets, like the signatures some providers attach to reasoning, ride along as opaque strings that only that vendor's adapter interprets.
+
+**One streaming contract.** Real adapters stream. Every adapter returns the same small set of events, whatever the vendor sends:
+
+```
+start
+text_delta      · thinking_delta   · toolcall_delta
+text_end        · thinking_end     · toolcall_end
+done   (stop | length | tool_use)
+error  (error | aborted)
+```
+
+The rule that makes this contract pleasant: **once the stream is returned, nothing throws.** Network failures, HTTP errors and cancellations all arrive as a final `error` event carrying a complete message. The loop never needs a try/catch around a model call.
+
+<Viz label="The streaming contract" caption="Two streams through the same contract. One finishes, one is cancelled mid-tool-call. Both end in a single terminal event.">
+  <EventStream runs={[
+    { label: "A reply that calls a tool", end: "ok", events: ["start", "thinking_delta", "thinking_end", "text_delta", "text_end", "toolcall_delta", "toolcall_delta", "toolcall_end", "done · tool_use"] },
+    { label: "The user presses Escape", end: "error", events: ["start", "text_delta", "text_delta", "toolcall_delta", "error · aborted"] },
+  ]} />
+</Viz>
+
+
+**Separate wire formats from providers.** Most providers speak one of a handful of wire formats: Anthropic-style messages, OpenAI-style chat completions or responses, Google's format, and a few more. A *provider* is just an identity, an auth method, a model list and a pointer to one wire format. That's how dozens of providers can share a handful of adapters. The small differences between "OpenAI-compatible" servers (which field holds max tokens, whether a developer role exists) become per-model flags rather than more adapters.
+
+<Viz label="One interface, thin adapters" caption="The loop only ever sees canonical messages and events. Each wire format is one adapter; the fake provider is the same interface with a script behind it.">
+  <FanOut
+    source={{ kind: "agent", title: "Agent loop", detail: "Never sees a vendor format" }}
+    hub={{ kind: "check", title: "Canonical", detail: "Message + one stream of events" }}
+    targets={[
+      { kind: "api", title: "Anthropic-style messages", detail: "Adapter 1" },
+      { kind: "api", title: "OpenAI-style chat / responses", detail: "Adapter 2, many compatible servers" },
+      { kind: "api", title: "Google format", detail: "Adapter 3" },
+      { kind: "ui", title: "Fake provider", detail: "Scripted replies, no network", dashed: true },
+    ]}
+  />
+</Viz>
+
+
+**A fake provider, written first.** It replays a scripted list of replies through the real interface. Every test of the loop runs against it with no network and no API keys. It is the whole idea in three lines:
+
+```
+fake provider:
+    holds a script of replies
+    every time it is asked:  return the next reply in the script
+```
+
+### Where it breaks
+
+- **Tool arguments arrive in pieces.** Models stream tool arguments as JSON fragments. Be tolerant while streaming (repair and partially parse, so the UI can show progress) and strict at the end (invalid JSON becomes an error result, never a guess).
+- **SDK retries can't be cancelled.** Many vendor SDKs sleep between retries without listening for an abort signal, so pressing Escape hangs until the sleep ends. Turn SDK retries off and own the retry loop.
+- **Not every error should be retried.** Overloaded and rate-limited: retry with backoff. Quota exhausted: don't. Context too long: don't retry, compact (section 4).
+
+---
+
+## 3. Message transforms
+
+### What
+
+A cleanup pass that runs on a **copy** of the conversation before every request and turns your stored history into something the target model will accept.
+
+### Why
+
+A real session history is messy. It may contain turns from a different model, a reply that was aborted halfway, a tool call whose result never arrived, and IDs in a format the next vendor rejects. Each vendor rejects some of that. You don't want to clean up the history itself, because it's your record of what happened. So you clean up what you *send*.
+
+### How
+
+The essential transforms:
+
+- **Drop reasoning from a different model.** Reasoning signatures only verify for the model that produced them. Replaying another model's thinking either fails the request or confuses the new model.
+- **Rewrite tool-call IDs** to fit the target vendor, and rewrite the matching results to the same new ID. One vendor's IDs can run past 400 characters with `|` and `/` in them, while another only accepts letters, digits, `_` and `-` up to 64 characters.
+- **Skip errored and aborted assistant turns.** Their half-written content gets rejected on replay.
+- **Add a synthetic result** ("No result provided", marked as an error) for any tool call that never got one.
+- **Replace images with a text placeholder** for models without vision.
+
+<Viz label="Stored vs. sent" caption="The stored history never changes. Each request gets a cleaned copy for its target model.">
+  <MismatchTable
+    headers={["Stored", "Sent", "Why"]}
+    rows={[
+      { wrote: "thinking (signed by model A)", actual: "dropped", result: "A signature only verifies for the model that wrote it." },
+      { wrote: "toolu_01|call/9f… (400+ chars)", actual: "call_9f2a", result: "Target accepts letters, digits, _ and -, up to 64." },
+      { wrote: "aborted assistant turn", actual: "skipped", result: "Half-written content is rejected on replay." },
+      { wrote: "tool call, no result", actual: "+ error: No result provided", result: "Every call needs exactly one result." },
+      { wrote: "screenshot.png", actual: "[image omitted]", result: "The target model has no vision." },
+    ]}
+  />
+</Viz>
+
+
+```
+transform(conversation, target model) → a cleaned copy:
+    for each message:
+        errored or aborted assistant turn:
+            skip it, and the results that answer it
+        assistant turn from a different model:
+            keep it, but drop its reasoning
+        any tool-call id:
+            rewrite it to the target's format
+            give its result the same new id
+    after each assistant turn's results:
+        tool call with no result?  add error "No result provided"
+    return the copy        # the stored conversation is never touched
+```
+
+After this generic pass, each adapter does its vendor-specific part, such as adding prompt-cache markers or converting your canonical format to the vendor's JSON.
+
+### Where it breaks
+
+- **Never separate a tool call from its result.** It's the most common way to get a request rejected, and it can happen in a transform, a compaction or a replay. Every one of those operations has to treat a call and its result as a single unit.
+- **Transforms must be pure.** If a transform edits stored history, you lose the record of what really happened, and the next model sees a past that never existed. Transform the copy, keep the log.
+
+---
+
+## The foundation: the log is the truth
+
+Before compaction and model switching, one decision makes both of them simple.
+
+**Store every event in an append-only log, and rebuild the model's context from that log before every request.** Messages, model switches and compactions are all entries. Nothing is ever edited or deleted.
+
+```
+build context (log):
+    model = none, summary = none, messages = empty
+    for each entry in the log, oldest first:
+        model change  →  model = the new model
+        message       →  add it to messages
+        compaction    →  summary = the entry's summary
+                         messages = only those from its "keep from" point
+    if there is a summary:
+        put "Summary so far: ..." in front of the messages
+    return model, messages
+```
+
+Why this matters: when memory is recomputed from disk on every request, memory can't drift from disk. A crash costs at most one entry. Resuming a session restores exactly what the model knew, including which model it was. And compaction or a model switch never has to reach into the loop. It appends an entry, and the next request sees the change automatically.
+
+<Viz label="The log is the truth" caption="Nothing in the log is edited or deleted. The context is recomputed from it after every entry, so a model change or a compaction is just one more line.">
+  <LogRebuild entries={[
+    { type: "model", model: "model-a" },
+    { type: "message", role: "user", text: "fix the failing test" },
+    { type: "message", role: "assistant", text: "read(test_api.py)" },
+    { type: "message", role: "tool", text: "…312 lines…" },
+    { type: "message", role: "assistant", text: "bash(pytest)" },
+    { type: "message", role: "tool", text: "1 failed: test_login" },
+    { type: "model", model: "model-b" },
+    { type: "compaction", summary: "Goal: fix test_login. Read test_api.py; 1 failure.", keep: 2 },
+    { type: "message", role: "assistant", text: "edit(api.py)" },
+    { type: "message", role: "tool", text: "ok" },
+  ]} />
+</Viz>
+
+
+A related trick: store the system prompt and the tool list *inside* the log as system messages, and append small diffs when they change. A change then lands at the end of the conversation instead of rewriting its beginning, so the provider's prompt cache stays valid, and any point in history can be replayed exactly.
+
+---
+
+## 4. Compaction
+
+### What
+
+When the conversation gets close to the model's context window, summarize the older part and keep the recent part word for word.
+
+### Why
+
+The context window is fixed. An agent session is not. Every tool result goes back into the context, and a few file reads or long command outputs can fill hundreds of thousands of tokens. Without compaction, a long task ends in an overflow error at the moment it matters most.
+
+### How
+
+**When to compact.** Trigger when the context gets within a reserve of the window, for example about 16,000 tokens, so there's always room for the model's reply. Estimate the tokens as the provider's last reported usage, plus about four characters per token for anything added since. Check between turns too, not just between user prompts, so a long chain of tool calls can't overflow halfway through.
+
+**Where to cut.** Walk backwards from the newest message until you've kept a budget, for example about 20,000 tokens. Then move the cut to a valid point. The cut **may never land on a tool result**, because a result whose call has been summarized away gets rejected.
+
+```
+should compact:
+    estimated tokens = last usage the provider reported
+                     + (characters added since ÷ 4)
+    compact when estimated tokens > context window − reserve (about 16k)
+
+find the cut:
+    walk backwards from the newest message, adding up tokens
+    once about 20k tokens are kept:
+        cut lands on a tool result? move it past those results
+        return the cut          # everything before it gets summarized
+    reached the start first?  nothing to compact yet
+```
+
+**How to summarize.** Flatten the old messages to plain text (`[User]: ...`, `[Assistant tool calls]: read(path="src/a.py")`) so the summarizer doesn't mistake them for a live chat, and cap long tool outputs. Then ask for a fixed template:
+
+```
+## Goal
+## Constraints & preferences
+## Progress (done / in progress / blocked)
+## Key decisions
+## Next steps
+## Critical context (exact file paths, function names, error messages)
+```
+
+**Record it in the log.** Append a compaction entry with the summary and the index of the first message to keep. The old messages stay in the log. The model just stops seeing them, as the rebuild above shows.
+
+<Viz label="Compaction" caption="Fill to window − reserve, walk back about 20k tokens, never cut on a tool result, summarize the rest.">
+  <ContextMeter />
+</Viz>
+
+
+### Where it breaks
+
+- **Summaries of summaries lose detail.** On the second compaction, pass the previous summary in and ask the model to *update* it, rather than summarizing a summary from scratch.
+- **The model forgets which files it touched.** Don't ask the summarizer to remember facts you can compute. Track the files read and modified from the tool calls themselves, store the lists with the compaction entry, and carry them forward. After three compactions the agent still knows exactly what it changed.
+- **A stale token count triggers another compaction immediately.** The last usage number from the provider describes a context that no longer exists once you compact. Throw it away.
+- **A truncated summary becomes a broken checkpoint.** If the summary hit the output limit, reject it.
+- **Overflow loops.** When a request fails with "context too long", hide the failed attempt, compact, and retry **once**. A flag prevents a second attempt, so it can never loop.
+
+---
+
+## 5. Switching models mid-session
+
+### What
+
+Changing the model partway through a conversation (a cheaper model for easy steps, a stronger one for hard ones, another provider during an outage) while keeping the full history.
+
+### Why
+
+No single model is best at everything, or always available. Being able to switch is also what keeps you independent of any one vendor's pricing, limits and outages.
+
+### How
+
+If the earlier pieces are right, this is almost free:
+
+- **Canonical messages** mean the history isn't in any vendor's shape.
+- **Message transforms** adapt that history to whichever model is next: they drop the old model's reasoning and rewrite tool IDs for the new vendor.
+- **The log** records the switch as an entry (`{"type": "model_change", "model": ...}`), so resuming the session later restores the right model, and the rebuild finds the current model the same way it finds everything else.
+- **The `model` field** on each assistant message tells the transform which turns came from which model.
+
+The model switch itself is one appended line. Everything else already handles it.
+
+<Viz label="Switching models" caption="One appended entry; the pieces from sections 1–4 do the rest.">
+  <ArchDiagram className="" stages={[
+    { kind: "ui", title: "Switch", detail: "Append a model_change entry" },
+    { kind: "store", title: "Rebuild", detail: "The log names the current model" },
+    { kind: "process", title: "Transform", detail: "Drop old reasoning, rewrite tool IDs" },
+    { kind: "check", title: "Check the window", detail: "Compact first if the new one is smaller" },
+    { kind: "api", title: "New adapter", detail: "Same canonical messages, new wire format" },
+    { kind: "model", title: "Next request", detail: "Slower once: the prompt cache resets" },
+  ]} />
+</Viz>
+
+
+### Where it breaks
+
+- **Reasoning doesn't transfer.** The new model doesn't get the old model's private reasoning, only what was said and done. That's usually fine, but it explains why a model can seem to lose its train of thought right after a switch.
+- **The new model may have a smaller window.** A history that fit in one model's context may not fit the next. Check the compaction threshold right after a switch, before the first request.
+- **Capabilities differ.** Reasoning levels have to be clamped to what the new model supports, and images become placeholders for a model without vision.
+- **The prompt cache resets.** Cached prefixes belong to one provider. Expect the first request after a switch to be slower and more expensive.
+
+---
+
+## The whole design in one picture
+
+<Viz label="The whole design" caption="One request, one lap. Everything the model knows is rebuilt from the log; everything that happens is appended to it.">
+  <CycleDiagram nodes={[
+    { kind: "store", title: "Append-only log", detail: "The truth" },
+    { kind: "process", title: "Rebuild context", detail: "A projection of the log" },
+    { kind: "check", title: "Transform", detail: "A clean copy for this model" },
+    { kind: "api", title: "Adapter", detail: "Canonical → wire format" },
+    { kind: "model", title: "Model", detail: "Streams a canonical reply" },
+    { kind: "check", title: "Tool calls?", detail: "None: the turn is done" },
+    { kind: "process", title: "Run tools", detail: "Errors become results" },
+    { kind: "store", title: "Append results", detail: "Back into the log" },
+  ]} />
+</Viz>
+
+
+The decisions worth carrying into any harness you build:
+
+- **Errors are data.** Every failure becomes a message the model can read. Nothing throws out of the loop.
+- **One format inside, translation at the edge.** The loop never sees a vendor.
+- **The log is the truth. The context is a projection.** Rebuild it before every request, and express every change as an appended entry.
+- **A tool call and its result are one unit.** In transforms, compaction and replays.
+- **Compute facts, don't summarize them.** File lists come from tool calls, not from the model's memory.
+- **Recovery is policy around the loop.** Retries, budgets and compaction live outside the loop and keep it small.
+
+I learned several of these the hard way building the agent behind the AI screener I wrote about [in my last post](/blog/everything-i-got-wrong-building-an-ai-screener), especially errors as data. Failures that didn't come back as clear, typed results were the hardest bugs to find.
+
+**Part 2** builds on this core: MCP and tool design, plugins and permission gates, sandboxing, and deploying agents that other people run.
+
+If you've built a harness of your own, I'd like to know which of these pieces bit you first. My guess is a tool call that lost its result.

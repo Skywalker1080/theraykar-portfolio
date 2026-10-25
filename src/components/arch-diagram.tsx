@@ -1,14 +1,19 @@
-/* Minimal block diagram for the "For the nerds" sections: stages left to right (stacked on
-   phones), joined by connectors a small packet travels along, and a highlight that steps
-   through the stages in order. Each block carries a tiny animated glyph for its kind. */
+/* Minimal block diagram for the "For the nerds" sections and blog posts: stages left to right
+   (stacked on phones, or always with `vertical`), joined by connectors a small packet travels
+   along, and a highlight that steps through the stages in order. Each block carries a tiny
+   animated glyph for its kind, plus an optional tech-stack logo and a side branch
+   (a retry loop, an early exit) shown as a chip. */
+
+import { toolLogo } from "@/lib/tools";
+import { withArrows } from "@/components/viz/arrow";
 
 export type StageKind = "source" | "process" | "model" | "store" | "check" | "ui" | "agent" | "api";
 
-export type Stage = { kind: StageKind; title: string; detail: string };
+export type Stage = { kind: StageKind; title: string; detail: string; tool?: string; branch?: string };
 
 const STEP_S = 1.4; // seconds the highlight spends on each stage
 
-function StageGlyph({ kind }: { kind: StageKind }) {
+export function StageGlyph({ kind }: { kind: StageKind }) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" className={`sg sg-${kind}`}>
       {kind === "source" && (
@@ -57,19 +62,30 @@ function StageGlyph({ kind }: { kind: StageKind }) {
   );
 }
 
-export function ArchDiagram({ stages, caption }: { stages: Stage[]; caption?: string }) {
+export function ArchDiagram({
+  stages,
+  caption,
+  vertical = false,
+  className = "my-6",
+}: {
+  stages: Stage[];
+  caption?: string;
+  vertical?: boolean;
+  className?: string;
+}) {
   const cycle = `${stages.length * STEP_S}s`;
   // On wider screens the flow reads in rows of three; a row starts without a connector.
   const perRow = 3;
+  const layout = vertical ? "arch-v flex flex-col gap-2" : "flex flex-col gap-2 sm:grid sm:grid-cols-3 sm:gap-x-0 sm:gap-y-3";
   return (
-    <figure className="my-6">
-      <ol className="arch flex flex-col gap-2 sm:grid sm:grid-cols-3 sm:gap-x-0 sm:gap-y-3">
+    <figure className={className}>
+      <ol className={`arch ${layout}`}>
         {stages.map((s, i) => (
-          <li key={s.title} className="flex flex-col sm:flex-row sm:items-stretch">
+          <li key={s.title} className={vertical ? "flex flex-col" : "flex flex-col sm:flex-row sm:items-stretch"}>
             {/* Every cell gets a connector slot so columns line up; it's hidden where a row starts. */}
             <span
               aria-hidden="true"
-              className={`arch-link ${i === 0 ? "hidden sm:block" : ""} ${i % perRow === 0 ? "sm:invisible" : ""}`}
+              className={`arch-link ${i === 0 ? (vertical ? "hidden" : "hidden sm:block") : ""} ${!vertical && i % perRow === 0 ? "sm:invisible" : ""}`}
               style={{ animationDuration: cycle, animationDelay: `${(i - 0.5) * STEP_S}s` }}
             />
             <div
@@ -78,9 +94,14 @@ export function ArchDiagram({ stages, caption }: { stages: Stage[]; caption?: st
             >
               <div className="flex items-center gap-1.5">
                 <StageGlyph kind={s.kind} />
-                <span className="text-[13px] font-semibold leading-tight text-[#111827]">{s.title}</span>
+                <span className="text-[13px] font-semibold leading-tight text-[#111827]">{withArrows(s.title)}</span>
+                {s.tool && toolLogo(s.tool) && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={toolLogo(s.tool)} alt={s.tool} title={s.tool} className="arch-tool ml-auto h-4 w-4 object-contain" />
+                )}
               </div>
-              <p className="mt-1 text-[12px] leading-snug text-[#6B7280]">{s.detail}</p>
+              <p className="mt-1 text-[12px] leading-snug text-[#6B7280]">{withArrows(s.detail)}</p>
+              {s.branch && <p className="arch-branch mt-1.5 font-mono text-[11px] text-[#C026D3]">{withArrows(s.branch)}</p>}
             </div>
           </li>
         ))}

@@ -1,0 +1,352 @@
+---
+title: "How Two Servers Can Count Without Talking to Each Other"
+date: "2026-10-28"
+description: "Designing a distributed ID generator from first principles. Why asking the other server fails, how an invariant replaces coordination, and the failure modes that decide whether the design survives production."
+---
+
+Two servers are handing out IDs to users. Every ID has to be unique, forever, across both of them.
+
+It sounds like a solved problem, and it is. But if you've only ever used the solution (a UUID library, an auto-increment column, a Snowflake implementation someone else wrote), it's worth deriving it once from nothing. The answer itself is short. The reasoning that gets you there is what transfers to every other distributed system you'll build.
+
+This post is that derivation, the way I worked through it. I start with the obvious approach, watch it break, and keep asking one question until the design falls out: **what has to be true, and how do I make it true without asking anyone?**
+
+---
+
+## Step 1: Find the real problem
+
+### What
+
+The naive setup: each server keeps a counter that starts at 0 and adds 1 for every request.
+
+```
+Server A: 1, 2, 3, 4 ...
+Server B: 1, 2, 3, 4 ...
+```
+
+Both servers hand out `1`. Then both hand out `2`. Collision on every single ID.
+
+<Viz label="Step 1 · two naive counters" caption="Neither server is doing anything wrong on its own. They just pick from the same space.">
+  <IdStreams servers={[
+    { name: "Server A", tag: "counter from 0", ids: [1, 2, 3, 4, 5, 6] },
+    { name: "Server B", tag: "counter from 0", ids: [1, 2, 3, 4, 5, 6] },
+  ]} />
+</Viz>
+
+
+### Why it breaks
+
+My first note on this was that the two servers would hit a concurrency problem, generating the same ID in the same millisecond.
+
+That's close, but it's worth being precise, because the precise version changes the solution. The problem isn't that the servers run *at the same time*. Even if A ran on Monday and B ran on Tuesday, they'd still both produce `1, 2, 3`. The problem is that **both servers pick values from the same space, and neither one's local state says anything about what the other has picked.**
+
+So the real requirement is:
+
+> Every ID must be globally unique, even though each server runs independently.
+
+Writing that sentence down is the first step. Every later design decision gets tested against it.
+
+---
+
+## Step 2: Try the obvious fix, asking each other
+
+### What
+
+If the problem is that A doesn't know what B has generated, let A ask. Before handing out an ID, A checks with B: *have you generated this one?* If B says no, A uses it.
+
+### Where it breaks
+
+This fails, and the way it fails matters.
+
+A and B can ask each other **at the same moment**. A asks B about ID 7. B asks A about ID 7. Both answer "no, I haven't generated that." Both hand out 7.
+
+Each answer was correct when it was given. The decision built on top of it was still wrong, because the state changed between *checking* and *acting*. This is the classic **check-then-act race condition**, and making the network faster doesn't fix it. It only makes the window smaller.
+
+<Viz label="Step 2 · check, then act" caption="Every answer is true when it's given. The state changes between the check and the act.">
+  <RaceDiagram actors={["Server A", "Server B"]} steps={[
+    { from: 0, kind: "msg", text: "have you issued 7?" },
+    { from: 1, kind: "msg", text: "have you issued 7?" },
+    { from: 1, kind: "msg", text: "no" },
+    { from: 0, kind: "msg", text: "no" },
+    { from: "both", kind: "act", text: "issue 7" },
+    { from: "both", kind: "clash", text: "both issued 7" },
+  ]} />
+</Viz>
+
+
+### The real fix, and its price
+
+The correct version of "ask each other" is to make check-and-claim **one atomic operation**: a single authority, like a database sequence or a lock service, that hands out the next number and can never hand it out twice.
+
+That works. It's also what an auto-increment column is. But look at what it costs:
+
+- **Every ID is now a network round trip** to the authority.
+- **The authority is a bottleneck.** Every server's throughput is capped by one component.
+- **The authority is a single point of failure.** If it's down, nobody can create anything.
+
+<Viz label="Step 2 · one authority" caption="Correct, but every ID is a round trip to one place. When it goes down, so does every server.">
+  <AuthorityHub clients={["Server A", "Server B", "Server C"]} hub="Sequence" tool="PostgreSQL" />
+</Viz>
+
+
+So instead of trying to make the conversation between servers safer, I asked a different question.
+
+---
+
+## Step 3: The shift from coordination to an invariant
+
+Put yourself in Server A's position. The question I wrote down was:
+
+> Is there a way for A to generate an ID and be *guaranteed* it's unique, without asking its friend Server B?
+
+This is the turning point of the whole design. I stopped asking "has this ID been used?", which needs knowledge of the other server. I started asking **"what rule makes it impossible for the other server to produce the same ID?"**, which only needs knowledge of the rule.
+
+A rule like that is an **invariant**: a property that holds for every ID ever generated, no matter what any other server is doing.
+
+So what could A know, locally, that makes its IDs different from B's?
+
+---
+
+## Step 4: Partition the space
+
+### What
+
+Both servers agree on one rule up front, and then never talk again:
+
+- **A** starts at 2 and always adds 2: `2, 4, 6, 8 ...`
+- **B** starts at 1 and always adds 2: `1, 3, 5, 7 ...`
+
+A only ever produces even numbers. B only ever produces odd numbers. The two sets cannot overlap.
+
+<Viz label="Step 4 · partition the space" caption="A and B run at different speeds and never talk. Each one can only ever fill its own cells.">
+  <IdSpace size={16} start={1} modulo={2} owners={[
+    { name: "Server A", rule: "evens: 2, 4, 6…", remainder: 0, every: 1 },
+    { name: "Server B", rule: "odds: 1, 3, 5…", remainder: 1, every: 2 },
+  ]} />
+</Viz>
+
+
+### Why it works
+
+A doesn't need to know B's counter. B doesn't need to know A's. Neither cares whether the other is fast, slow, running or dead. Uniqueness isn't checked at runtime. **It's guaranteed by construction.**
+
+This step turns a *coordination problem* into a *partitioning problem*. Odd and even isn't the important part. The important part is that **each generator owns a slice of the ID space that nobody else can enter.**
+
+---
+
+## Step 5: Generalize to N servers
+
+### Where it breaks
+
+My immediate objection to odd/even was that it fails the moment you add a third server.
+
+Strictly speaking, the *idea* doesn't fail. The *rule* does, because "even and odd" only has two slices. So I needed the general form of the shared rule.
+
+### How
+
+Give each server a unique **worker ID** `w`, numbered from 0 up to `N - 1`. Each server keeps its own local sequence and computes:
+
+```
+ID = N × sequence + w
+```
+
+With three servers:
+
+```
+Server A  (w = 0):  0, 3, 6,  9 ...
+Server B  (w = 1):  1, 4, 7, 10 ...
+Server C  (w = 2):  2, 5, 8, 11 ...
+```
+
+Odd/even was just this formula with `N = 2`.
+
+<Viz label="Step 5 · N = 3" caption="ID = N × sequence + w. Each worker ID owns one residue class of the space.">
+  <IdSpace size={18} start={0} modulo={3} owners={[
+    { name: "A", rule: "w = 0", remainder: 0, every: 1 },
+    { name: "B", rule: "w = 1", remainder: 1, every: 2 },
+    { name: "C", rule: "w = 2", remainder: 2, every: 3 },
+  ]} />
+</Viz>
+
+
+### Where it breaks (again)
+
+The math is airtight, but it rests on two assumptions:
+
+1. **No two servers ever share a worker ID.** Two servers that both believe they're worker 1 will collide on every ID.
+2. **A server never reuses a sequence number.** If a server crashes and restarts its counter from 0, it regenerates IDs it already handed out.
+
+There's also a practical problem. `N` is baked into every ID. Going from 3 servers to 4 changes the formula, and the old and new IDs can overlap. Scaling the fleet means renumbering the world.
+
+I've solved generation, but only under assumptions I haven't enforced yet. That's the pattern to watch for in every design: **the guarantee is only as strong as the assumptions under it.**
+
+---
+
+## Step 6: Add time
+
+### What
+
+To get rid of the fixed `N` and the restart problem, let every ID carry three pieces of information:
+
+1. **Timestamp:** *when* it was generated
+2. **Worker ID:** *which* generator produced it
+3. **Sequence:** *which one* it was, within the same time interval on the same generator
+
+Pack all three into a single integer. This is exactly the structure Twitter published as **Snowflake** in 2010, and the derivation above is why it looks the way it does.
+
+### Why it works
+
+The uniqueness argument now has three layers, each covering the case the one before it can't:
+
+1. **Different timestamps** separate IDs created in different milliseconds.
+2. **Different worker IDs** separate IDs created by different servers in the same millisecond.
+3. **Different sequence numbers** separate IDs created by the same server in the same millisecond.
+
+Two IDs can only collide if they share all three, and the rules make that impossible.
+
+Adding time also buys two things for free. The sequence only has to be unique *within one millisecond*, so it can be small and reset constantly. And because the timestamp sits in the highest bits, **IDs sort roughly by creation time**, which databases love for indexing.
+
+### How: the bit layout
+
+The classic Snowflake layout fits in a signed 64-bit integer:
+
+<Viz label="Step 6 · a live Snowflake" caption="Minted in your browser as worker 7, epoch 2024-01-01 UTC. Timestamp in the high bits means newer IDs are bigger.">
+  <LiveSnowflake worker={7} epoch={1704067200000} />
+</Viz>
+
+
+Those numbers aren't arbitrary. They are capacity decisions:
+
+- **41 bits of milliseconds** ≈ 69 years before the clock field runs out, counted from a custom epoch you choose.
+- **10 bits of worker ID** = 1,024 generators.
+- **12 bits of sequence** = 4,096 IDs per millisecond per generator, or about 4 million per second from each one.
+
+If your system needs more generators and fewer IDs per millisecond, you move bits from the sequence to the worker ID. The layout is a set of trade-offs you're allowed to change.
+
+A minimal generator in Python:
+
+```python
+import threading
+import time
+
+EPOCH_MS = 1_704_067_200_000          # custom epoch: 2024-01-01 UTC
+WORKER_BITS, SEQ_BITS = 10, 12
+MAX_SEQ = (1 << SEQ_BITS) - 1         # 4,095
+
+class Snowflake:
+    def __init__(self, worker_id: int):
+        assert 0 <= worker_id < (1 << WORKER_BITS)
+        self.worker_id = worker_id
+        self.last_ms = -1
+        self.seq = 0
+        self.lock = threading.Lock()  # the only lock left is local
+
+    def next_id(self) -> int:
+        with self.lock:
+            now = int(time.time() * 1000)
+            if now < self.last_ms:
+                raise RuntimeError("clock moved backwards, refusing to issue IDs")
+            if now == self.last_ms:
+                self.seq = (self.seq + 1) & MAX_SEQ
+                if self.seq == 0:      # 4,096 IDs used this millisecond
+                    while now <= self.last_ms:
+                        now = int(time.time() * 1000)
+            else:
+                self.seq = 0
+            self.last_ms = now
+            return ((now - EPOCH_MS) << (WORKER_BITS + SEQ_BITS)) \
+                | (self.worker_id << SEQ_BITS) \
+                | self.seq
+```
+
+Notice the lock. Threads *inside* one server still race each other for the same sequence number, which is the same check-then-act problem from Step 2 at a smaller scale. The difference is that a local lock costs nanoseconds, while a network round trip costs milliseconds. **The design didn't remove coordination. It shrank it to the cheapest place it can live.**
+
+---
+
+## Step 7: Where it breaks in production
+
+The construction gives a mathematical guarantee. Production gives you machines that restart, clocks that drift, and operators who copy config files. Each of these is a way the invariant can be violated, and the system has to enforce it, not assume it.
+
+### 1. Worker IDs must be unique
+
+**What breaks:** two servers start with the same worker ID, often from a copied config or an autoscaled clone. They collide constantly, and silently.
+
+<Viz label="Failure 1 · a cloned worker ID" caption="The formula is still correct. The assumption under it, one server per worker ID, isn't.">
+  <IdStreams servers={[
+    { name: "Server A", tag: "w = 0", ids: [0, 3, 6, 9, 12] },
+    { name: "Server B", tag: "w = 1", ids: [1, 4, 7, 10, 13] },
+    { name: "Clone", tag: "w = 1 (copied config)", ids: [1, 4, 7, 10, 13] },
+  ]} />
+</Viz>
+
+
+**How to enforce it:**
+- **Static assignment** in config. Simple, and fine for a small fixed fleet, but a human mistake breaks it.
+- **Lease from a coordination service** such as ZooKeeper or etcd. A server claims a worker ID on startup, holds a lease, and gives it up when it dies.
+- **Claim from a database row** with a unique constraint, at startup only.
+
+The pattern behind all three: **coordination moves from once per ID to once per boot.** That's the real trade the whole design makes. You still need a shared authority. You just stop needing it on the hot path.
+
+<Viz label="Where coordination went" caption="Same 16 IDs. The authority is still there; it just left the hot path.">
+  <TickRows rows={[
+    { label: "Ask an authority for every ID", ticks: ["net", "net", "net", "net", "net", "net", "net", "net", "net", "net", "net", "net", "net", "net", "net", "net"], note: "16 round trips" },
+    { label: "Lease a worker ID once per boot", ticks: ["net", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local", "local"], note: "1 round trip" },
+  ]} />
+</Viz>
+
+
+### 2. Clocks move backwards
+
+**What breaks:** NTP corrects a drifting clock and moves time back 50 ms. The generator now produces timestamps it already used, and the sequence starts again from 0. Duplicates.
+
+**How to enforce it:** never issue an ID with a timestamp older than the last one. Either refuse (like the code above) or wait until the clock catches up. For small jumps, waiting is fine. For large ones, failing loudly is safer than issuing duplicates quietly.
+
+<Viz label="Failure 2 · the clock moves back" caption="Never issue a timestamp older than the last one. Hold (or refuse) until the clock passes it.">
+  <ClockJump />
+</Viz>
+
+
+### 3. Restarts inside the same millisecond
+
+**What breaks:** a server crashes and restarts fast enough to land in the same millisecond with the same worker ID. Its in-memory `last_ms` and `seq` are gone, so it may reissue IDs.
+
+**How to enforce it:** persist the last timestamp, or simply wait a few milliseconds on startup before issuing anything. Cheap insurance.
+
+### 4. The sequence runs out
+
+**What breaks:** one generator gets more than 4,096 requests in a single millisecond.
+
+**How to enforce it:** wait for the next millisecond, as the code does. If that happens often, it's a capacity signal: add generators or move bits from the worker ID to the sequence.
+
+### 5. "Sorted" only means roughly sorted
+
+**What breaks:** someone assumes the IDs are strictly ordered across the whole system. They aren't. Two servers with clocks a few milliseconds apart produce IDs that are ordered *by each server's clock*, not by real global time.
+
+**How to handle it:** treat Snowflake IDs as *k-sorted*: good for indexing and rough time ordering, wrong for anything that needs exact global order. If you truly need total order, you need a single sequencer, and you're back to paying for coordination on every ID.
+
+---
+
+## The whole chain in one line
+
+> collision → unsafe checking → the need for an invariant → partition the space → generalize to N servers → add time and a local sequence → enforce the invariant under failure
+
+<Viz label="The whole chain">
+  <ArchDiagram className="" stages={[
+    { kind: "source", title: "Collision", detail: "Two counters, one space" },
+    { kind: "api", title: "Unsafe checking", detail: "Check, then act: a race" },
+    { kind: "check", title: "An invariant", detail: "A rule, not a conversation" },
+    { kind: "store", title: "Partition", detail: "Each server owns a slice" },
+    { kind: "process", title: "N servers", detail: "ID = N × seq + w" },
+    { kind: "model", title: "Time + sequence", detail: "Snowflake: 41 · 10 · 12 bits", tool: "Python" },
+    { kind: "check", title: "Enforce it", detail: "Unique workers, monotonic time" },
+  ]} />
+</Viz>
+
+
+What I take from this goes beyond ID generation:
+
+- **Write down the property that must always be true** before designing anything. "Globally unique despite independent execution" did more work than any clever trick.
+- **When coordination is unsafe or expensive, try to make it unnecessary** instead of making it safer. Guarantees by construction beat guarantees by conversation.
+- **Coordination rarely disappears. It moves.** Here it moved from every ID to every boot, and from the network to a local lock.
+- **Every guarantee has assumptions. The production work is enforcing them.** Unique worker IDs, monotonic time, persisted state: none of them are details. They are the guarantee.
+
+Next in this series I'll take the same approach to an **agent harness**: the loop that sits under every AI agent, derived from what has to be true for an LLM's output to be safe to act on.

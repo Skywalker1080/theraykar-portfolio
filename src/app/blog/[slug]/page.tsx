@@ -9,6 +9,7 @@ import rehypePrettyCode from "rehype-pretty-code";
 import "katex/dist/katex.min.css";
 import { getAllPosts, getPost } from "@/lib/blog";
 import { mdxComponents } from "@/components/mdx";
+import { rehypePinkArrows } from "@/lib/rehype-pink-arrows";
 
 export const dynamicParams = false;
 
@@ -84,9 +85,13 @@ export default async function PostPage({
             source={post.content}
             components={mdxComponents}
             options={{
+              // Posts live in this repo, so allow JS expressions in props (arrays for the
+              // visualizations); the dangerous-globals filter stays on.
+              blockJS: false,
               mdxOptions: {
                 remarkPlugins: [remarkMath],
                 rehypePlugins: [
+                  rehypePinkArrows,
                   rehypeKatex,
                   [rehypePrettyCode, { theme: "github-light" }],
                 ],

@@ -38,6 +38,18 @@ The first-principles version is simple. A user types a sentence. An LLM understa
 
 I built it as a LangGraph pipeline: parse the intent, retrieve the schema, generate SQL, validate it, execute it, format the response. If validation or execution failed, the error went back to the model for another attempt, up to 3 retries.
 
+
+<Viz label="Version 1 · sentence → SQL" caption="The LangGraph pipeline. A query that failed validation or execution went back to the model, up to three times.">
+  <ArchDiagram className="" stages={[
+    { kind: "agent", title: "Parse intent", detail: "What is the trader asking for?", tool: "LangGraph" },
+    { kind: "store", title: "Retrieve schema", detail: "Tables and columns from router.md" },
+    { kind: "agent", title: "Generate SQL", detail: "The model writes the query" },
+    { kind: "check", title: "Validate", detail: "AST guardrails before anything runs", branch: "↺ error → regenerate, up to 3×" },
+    { kind: "store", title: "Execute", detail: "Read-only session, 30s timeout", tool: "PostgreSQL" },
+    { kind: "ui", title: "Format", detail: "Rows back to the trader" },
+  ]} />
+</Viz>
+
 ### Why
 
 SQL was the obvious choice. The data already lived in Postgres, the indicators were already computed, and a screener *is* a filter-and-rank query. No new infrastructure, no new execution environment. The shortest path from sentence to rows.
@@ -52,7 +64,19 @@ Before the agent answered a single question, I built the validator. I didn't wan
 - check every table against a whitelist
 - inject or clamp a `LIMIT` of 100 rows
 
-On top of that, every connection ran as a read-only session with a 30-second statement timeout. The cheapest time to build a guardrail is before you need it.
+On top of that, every connection ran as a read-only session with a 30-second statement timeout.
+
+<Viz label="The SQL validator" caption="Illustrative queries. Every generated query walked this stack before it could touch the database.">
+  <CheckStack
+    checks={["Comments stripped, one statement only", "Parses to exactly one SELECT", "No system catalogs or introspection", "Every table on the whitelist", "LIMIT injected or clamped to 100"]}
+    cases={[
+      { query: "SELECT symbol, rsi_14 FROM technicals WHERE rsi_14 < 30", verdict: "runs in a read-only session, 30s timeout" },
+      { query: "SELECT 1; DROP TABLE prices", failAt: 0, verdict: "rejected: more than one statement" },
+      { query: "SELECT * FROM pg_catalog.pg_tables", failAt: 2, verdict: "rejected: system catalog" },
+    ]}
+  />
+</Viz>
+ The cheapest time to build a guardrail is before you need it.
 
 ### Where it broke, part 1: the model couldn't see the database
 
@@ -63,6 +87,16 @@ My first answer was a router file, `router.md`. It was a document that explained
 And testing went badly. The agent failed on simple queries. Every time it made a new mistake, I added a new instruction to `router.md`: *when the user asks about X, use table Y.* *Never read prices from this table.* *"Blue chip" means this.*
 
 The file grew to **358 lines and 25 KB**. Each fix worked for the case in front of me and made the next case worse, because the model now had more rules to weigh and more ways to pick the wrong one.
+
+<Viz label="The prompt-patching treadmill" caption="Every failure became a new rule. The file grew; the answers didn't get better.">
+  <GrowingFile name="router.md" lines={358} size="25 KB" rules={[
+    "When the user asks about X, use table Y.",
+    "Never read prices from this table.",
+    "“Blue chip” means this.",
+    "...and one more rule for the next failure.",
+  ]} />
+</Viz>
+
 
 I'd call this the prompt-patching treadmill. **When fixes keep landing in the prompt, the problem isn't the prompt.**
 
@@ -75,6 +109,16 @@ When I went through the failures one by one, a pattern showed up. Most of them w
 - A signal-direction column was a `smallint` (-1, 0, 1), but my documentation described it as "Buy" and "Sell". The model faithfully wrote `direction = 'Buy'`.
 - A column the router told it to filter on (`is_active`) wasn't populated at all, so the filter returned 0 rows.
 - I had a rolling 108-day price table for fast queries and a full-history price table, and the model kept mixing them up on timestamps.
+
+<Viz label="Model vs. data layer" caption="The model wrote what the docs and names suggested. The data said otherwise.">
+  <MismatchTable rows={[
+    { wrote: "durability_score", actual: "Durability_Score", result: "Column not found. One retry burned." },
+    { wrote: "direction = 'Buy'", actual: "smallint: -1 · 0 · 1", result: "Documented as text, stored as a number. Never matches." },
+    { wrote: "WHERE is_active", actual: "is_active: never populated", result: "The router said filter on it. 0 rows." },
+    { wrote: "108-day price table", actual: "full-history table", result: "Right data, wrong window." },
+  ]} />
+</Viz>
+
 
 The model was doing exactly what my schema and docs told it to do. The schema and docs were wrong or ambiguous. **An agent is a very fast, very literal reader of your data layer, and it finds every inconsistency you've been living with.**
 
@@ -140,6 +184,17 @@ I flipped it:
 
 The golden set moved from roughly 2 in 10 on complex queries to **39 out of 50 overall.**
 
+<Viz label="Less context, better answers" caption="Top: the tables the agent could see. Bottom: golden-set scores before and after the router rewrite.">
+  <DotGrid total={56} kept={34} keptLabel="34 tables the agent can see" cutLabel="22 never relevant to screening" />
+  <div className="my-4 border-t border-[#ECECED]" />
+  <Bars items={[
+    { label: "Simple questions, one category", value: 6, max: 10, note: "First golden set" },
+    { label: "Complex, mixed questions", value: 2, max: 10, note: "First golden set" },
+    { label: "Golden set of 50, after the rewrite", value: 39, max: 50, highlight: true },
+  ]} />
+</Viz>
+
+
 ---
 
 ## The determinism ratchet
@@ -159,6 +214,19 @@ The fix each time was to **take the decision away from the LLM**:
 
 Looking back, this is the pattern of the whole project. Every version took one more decision away from the model and gave it to deterministic code. I didn't plan it that way. The evidence kept pointing there.
 
+<Viz label="The determinism ratchet" caption="One decision at a time moved from the model to code. Version 2 kept going.">
+  <Ratchet items={[
+    { label: "What “blue chip” means", when: "v1" },
+    { label: "Window for rare signals", when: "v1" },
+    { label: "Refuse when no table fits", when: "v1" },
+    { label: "Ask when intent is unclear", when: "v1" },
+    { label: "Which tables to read", when: "v2" },
+    { label: "Writing the query", when: "v2" },
+    { label: "Which coins to scan", when: "v2" },
+  ]} />
+</Viz>
+
+
 ---
 
 ## 90 seconds, and most of it was the model fixing itself
@@ -168,6 +236,14 @@ Looking back, this is the pattern of the whole project. Every version took one m
 Accuracy was getting there. Speed wasn't. Easy queries took **30–40 seconds**. Complex ones took **60–90 seconds**.
 
 When I traced it, the model wasn't slow at thinking. **The retry loop was the latency.** A wrong first SQL meant an error, then a second generation, sometimes a third, and each round trip added the full cost of an LLM call plus a query.
+
+<Viz label="Where the time went" caption="Not to scale. Every retry pays for another LLM call and another query.">
+  <RetryTimeline runs={[
+    { label: "Right the first time", steps: ["gen", "query"], note: "1 LLM call" },
+    { label: "Wrong first SQL", steps: ["gen", "fail", "gen", "fail", "gen", "query"], note: "3 LLM calls" },
+  ]} />
+</Viz>
+
 
 ### How
 
@@ -221,24 +297,16 @@ Every failure class from Version 1 came from the model having to understand our 
 
 The pipeline:
 
-```
-user query
-   │
-   ▼
-parse_intent ── is it a screener? confidence, missing details, ambiguities
-   │   └─ low confidence → clarify (ask the user, then resume)
-   ▼
-plan_execution ── a short methodology the user can see
-   ▼
-generate_code ── declares needs + writes two functions against a fixed contract
-   ▼
-validate_code ── AST checks: allowed imports, banned calls, required functions
-   ▼
-execute ── fetch declared datasets → 5-coin smoke run → full run (sandboxed)
-   │   └─ crash → repair loop (max 2) with the error fed back
-   ▼
-results ── or, on 0 rows, three "did you mean" alternatives
-```
+<Viz label="Version 2 · the harness" caption="Each step hands off to the next. The pink notes are the exits: ask the user, repair the code, or suggest alternatives.">
+  <ArchDiagram vertical className="" stages={[
+    { kind: "agent", title: "parse_intent", detail: "Is it a screener? Confidence, missing details, ambiguities", tool: "LangGraph", branch: "↺ low confidence → ask the user, then resume" },
+    { kind: "model", title: "plan_execution", detail: "A short methodology the user can see" },
+    { kind: "agent", title: "generate_code", detail: "Declares its data needs, writes two functions against a fixed contract", tool: "Python" },
+    { kind: "check", title: "validate_code", detail: "AST checks: allowed imports, banned calls, required functions" },
+    { kind: "process", title: "execute", detail: "Fetch declared datasets → 5-coin smoke run → full run, sandboxed", branch: "↺ crash → repair with the error fed back, max 2" },
+    { kind: "ui", title: "results", detail: "Ranked rows for the trader", branch: "↳ 0 rows → three “did you mean” alternatives" },
+  ]} />
+</Viz>
 
 The contract is the heart of it. Every generated program starts with a metadata line:
 
@@ -249,6 +317,11 @@ The contract is the heart of it. Every generated program starts with a metadata 
 Then two functions with fixed signatures: one that evaluates a single coin, and one `main` that runs it across the universe and returns rows, filtered results, exceptions and a summary.
 
 The data layer is a **registry**. Each dataset (fundamentals, technicals, indicators, ML signals, price history) has hand-written, tested SQL behind it. The model only names the datasets it wants. The registry validates those names against a whitelist and fetches the data. The universe (top 100, top 500 or all 1,000 coins by market cap) is resolved in code too.
+
+<Viz label="The LLM declares, the code fetches" caption="The model only names datasets. The registry checks each name against a whitelist and runs hand-written, tested SQL. Only data comes back.">
+  <ContractBoundary />
+</Viz>
+
 
 The guardrails moved with the architecture. The SQL validator became a **Python AST validator**: an import allowlist (pandas, numpy, TA-Lib, math, datetime and a few others), banned modules (`os`, `subprocess`, `socket`, network libraries), banned calls (`eval`, `exec`, `open`, `getattr`, `__import__`), and no dunder access.
 
@@ -284,6 +357,18 @@ The reasoning was team size. App Runner gives you a container, HTTPS, autoscalin
 - Secrets live in **AWS Secrets Manager** and are injected at runtime. The database is RDS over SSL.
 - Tracing went to LangSmith, and later **Langfuse**, grouped by session, so every user run can be replayed step by step.
 
+<Viz label="Ship path" caption="From a push to a running container, with no long-lived keys anywhere.">
+  <ArchDiagram className="" stages={[
+    { kind: "source", title: "Push", detail: "Every push to the repo", tool: "GitHub" },
+    { kind: "check", title: "OIDC", detail: "Short-lived AWS credentials, no keys in CI", tool: "AWS" },
+    { kind: "process", title: "Build", detail: "Image tagged with the commit SHA, pushed to ECR", tool: "Docker" },
+    { kind: "api", title: "App Runner", detail: "Container, HTTPS, autoscaling", tool: "AWS" },
+    { kind: "store", title: "Secrets + RDS", detail: "Secrets Manager at runtime, Postgres over SSL", tool: "PostgreSQL" },
+    { kind: "ui", title: "Traces", detail: "Langfuse, grouped by session" },
+  ]} />
+</Viz>
+
+
 ### Where it breaks
 
 Managed simplicity has edges, and I hit them:
@@ -304,9 +389,25 @@ The numbers it measured:
 - Intent 4.2s · plan 4.0s · **code generation 16.9s** · fetch ~6s · execution ~9s
 - Under concurrency, it would break at around **10–15 simultaneous users**. Two execution slots, cold-starting Python interpreters that each imported pandas and TA-Lib, queued requests past App Runner's 120-second limit.
 
+<Viz label="Per-stage latency" caption="Measured in the review across 38 single-user runs. Code generation is the critical path.">
+  <Bars items={[
+    { label: "Intent", value: 4.2, max: 16.9, display: "4.2s" },
+    { label: "Plan", value: 4.0, max: 16.9, display: "4.0s" },
+    { label: "Code generation", value: 16.9, max: 16.9, display: "16.9s", highlight: true },
+    { label: "Fetch", value: 6, max: 16.9, display: "~6s" },
+    { label: "Execution", value: 9, max: 16.9, display: "~9s" },
+  ]} />
+</Viz>
+
+
 The findings fell into three groups.
 
 **Security.** My sandbox was enforced in Python, not by the operating system. An AST check is a *filter*, not a *boundary*. The endpoint had no auth or rate limit, and session IDs came from the client.
+
+<Viz label="Filter vs. boundary">
+  <FilterVsBoundary />
+</Viz>
+
 
 **Reliability.** Failures were silent or mislabelled. A database outage came back to the user as "did you mean...?" suggestions. A valid screen with 0 matches was diagnosed as a routing failure, because the tail of the graph still read fields from the SQL era that nothing wrote anymore.
 
@@ -322,6 +423,15 @@ The findings fell into three groups.
 - **Sessions in Postgres**, so a clarification can resume on any instance and survive a deploy.
 - **One dataset registry as the single source of truth.** Each dataset is described once, and the prompt and contract text are generated from it. Before, the same dataset was described in four places that had already drifted apart.
 - **Bounded, parallel data fetches**, and a warm worker pool with pandas and TA-Lib preloaded, so a run doesn't cold-start eight interpreters.
+
+<Viz label="Deadlines everywhere" caption="Every wait has a budget, and the request deadline sits under the platform's hard cap.">
+  <Deadlines total={120} marks={[
+    { at: 45, label: "LLM call timeout" },
+    { at: 110, label: "request deadline" },
+    { at: 120, label: "App Runner cap" },
+  ]} />
+</Viz>
+
 
 After the first hardening pass, production queries came back in around **20 seconds**, against 40 seconds for the SQL version at launch, with a much larger question space.
 

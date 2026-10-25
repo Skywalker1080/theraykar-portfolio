@@ -458,3 +458,335 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .now-fill, .now-day, .now-cursor, .now-claude { animation: none; }
 }
+
+/* Blog visualizations (components/viz/*). Same parts as the arch diagrams: hairline blocks,
+   the pink gradient, packets on connectors. Loops run in CSS; one-shot reveals key off
+   [data-inview], which InView sets once the figure scrolls into view. */
+.arch-tool { filter: drop-shadow(0 0 4px rgba(217, 70, 239, 0.3)); }
+@media (min-width: 640px) {
+  .arch-v .arch-link { width: 1px; height: 14px; }
+  .arch-v .arch-link::after { top: 0; left: -2px; animation-name: arch-packet-v; }
+}
+
+/* Bars: fill from the left */
+.viz-bar {
+  background: #d1d5db;
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.viz-bar.is-hi { background: linear-gradient(90deg, #f4adff, #ea00ff); }
+[data-inview] .viz-bar { transform: scaleX(1); }
+
+/* Dot grid: the cut items fade to empty rings */
+.viz-dot {
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background-color: #e879f9;
+  transition: background-color 500ms ease, box-shadow 500ms ease, transform 500ms ease;
+}
+[data-inview] .viz-dot.is-cut {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px #d1d5db;
+  transform: scale(0.7);
+}
+
+/* Mismatch table: a highlight walks the rows (duration and delay set inline) */
+.viz-row {
+  animation-name: viz-row;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes viz-row {
+  0%, 20%, 100% { border-color: #ececed; box-shadow: none; }
+  4%, 16% { border-color: #f0abfc; box-shadow: 0 0 0 3px #fdf4ff; }
+}
+
+/* Retry timeline: segments land one after another */
+.viz-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0;
+  transform: scaleX(0.3);
+  transform-origin: left;
+  transition: opacity 350ms ease, transform 350ms ease;
+}
+[data-inview] .viz-seg { opacity: 1; transform: none; }
+.viz-seg-gen { background: linear-gradient(90deg, #f4adff, #ea00ff); color: #fff; }
+.viz-seg-query { background: #e5e7eb; }
+.viz-seg-fail { background: #fff; box-shadow: inset 0 0 0 1px #fda4af; color: #e11d48; }
+.viz-key { display: inline-block; width: 14px; height: 8px; border-radius: 2px; }
+
+/* Deadlines: time sweeps toward the hard cap */
+.viz-sweep {
+  width: 100%;
+  transform-origin: left;
+  background: linear-gradient(90deg, #f4adff, #ea00ff);
+  animation: viz-sweep 6s linear infinite;
+}
+@keyframes viz-sweep {
+  0% { transform: scaleX(0); opacity: 1; }
+  85% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+/* Check stack */
+.viz-check { color: #9ca3af; transition: background-color 250ms ease, color 250ms ease; }
+.viz-check-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  font-size: 10px;
+  color: #fff;
+  transition: background-color 250ms ease, border-color 250ms ease;
+}
+.viz-check.is-now { color: #111827; background: #fdf4ff; }
+.viz-check.is-now .viz-check-mark { border-color: #ea00ff; animation: sg-blink 0.9s ease-in-out infinite; }
+.viz-check.is-pass { color: #4b5563; }
+.viz-check.is-pass .viz-check-mark {
+  border-color: transparent;
+  background: linear-gradient(180deg, #f4adff, #ea00ff);
+  animation: op-tick 0.4s ease-out both;
+}
+.viz-check.is-fail { color: #111827; background: #fff1f2; }
+.viz-check.is-fail .viz-check-mark { border-color: transparent; background: #e11d48; animation: op-tick 0.4s ease-out both; }
+.viz-type { animation: exp-open 400ms ease-out; }
+.viz-rule { animation: exp-open 400ms ease-out; }
+
+/* Ratchet: chips slide across the divider */
+.viz-chip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(50% - 10px);
+  height: 100%;
+  padding: 0 10px;
+  border: 1px solid #ececed;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  transition: left 650ms cubic-bezier(0.34, 1.3, 0.64, 1), border-color 300ms ease, color 300ms ease;
+}
+.viz-chip.is-moved { left: calc(50% + 10px); border-color: #f0abfc; color: #111827; }
+
+/* Contract boundary: names go out in pink, data comes back in grey */
+.cb-wire { position: relative; display: block; width: 1px; height: 22px; background: #e5e7eb; }
+.cb-wire i {
+  position: absolute;
+  left: -2px;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #ea00ff;
+  opacity: 0;
+  animation: cb-down 2.6s linear infinite;
+}
+.cb-wire i:nth-child(2) { background: #9ca3af; animation-name: cb-up; }
+@keyframes cb-down {
+  0% { top: 0; opacity: 0; }
+  8% { opacity: 1; }
+  42% { top: calc(100% - 5px); opacity: 1; }
+  50%, 100% { top: calc(100% - 5px); opacity: 0; }
+}
+@keyframes cb-up {
+  0% { top: calc(100% - 5px); opacity: 0; }
+  8% { opacity: 1; }
+  42% { top: 0; opacity: 1; }
+  50%, 100% { top: 0; opacity: 0; }
+}
+@media (min-width: 640px) {
+  .cb-wire { width: 36px; height: 1px; }
+  .cb-wire i { top: -2px; left: 0; animation-name: cb-right; }
+  .cb-wire i:nth-child(2) { animation-name: cb-left; }
+}
+@keyframes cb-right {
+  0% { left: 0; opacity: 0; }
+  8% { opacity: 1; }
+  42% { left: calc(100% - 5px); opacity: 1; }
+  50%, 100% { left: calc(100% - 5px); opacity: 0; }
+}
+@keyframes cb-left {
+  0% { left: calc(100% - 5px); opacity: 0; }
+  8% { opacity: 1; }
+  42% { left: 0; opacity: 1; }
+  50%, 100% { left: 0; opacity: 0; }
+}
+.cb-hit { animation: cb-hit 2.6s ease-in-out infinite; }
+@keyframes cb-hit {
+  0%, 30%, 100% { color: #111827; }
+  10%, 20% { color: #c026d3; }
+}
+
+/* Filter vs boundary: the packet slips past the dashed AST box; only the solid wall stops it */
+.fvb-dot {
+  left: calc(50% - 3px);
+  opacity: 0;
+  animation-duration: 3.2s;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+.fvb-before .fvb-dot { animation-name: fvb-escape; }
+.fvb-after .fvb-dot { animation-name: fvb-bounce; }
+@keyframes fvb-escape {
+  0%, 15% { left: calc(50% - 3px); opacity: 0; }
+  25% { opacity: 1; }
+  75% { left: calc(100% + 8px); opacity: 1; }
+  100% { left: calc(100% + 8px); opacity: 0; }
+}
+@keyframes fvb-bounce {
+  0%, 15% { left: calc(50% - 3px); opacity: 0; }
+  25% { opacity: 1; }
+  55% { left: calc(100% - 19px); }
+  65%, 85% { left: calc(100% - 32px); opacity: 1; }
+  100% { left: calc(100% - 32px); opacity: 0; }
+}
+.fvb-wall { animation: fvb-wall 3.2s ease-in infinite; }
+@keyframes fvb-wall {
+  0%, 52%, 72%, 100% { border-color: #111827; box-shadow: none; }
+  56%, 62% { border-color: #ea00ff; box-shadow: 0 0 0 3px #fdf4ff; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viz-row, .viz-sweep, .cb-wire i, .cb-hit, .fvb-wall, .viz-type, .viz-rule,
+  .viz-check-mark { animation: none !important; }
+  .fvb-dot { animation: none; opacity: 1; }
+  .viz-bar, .viz-dot, .viz-seg, .viz-chip { transition: none; }
+}
+
+/* Arrows in post text and visualizations (lib/rehype-pink-arrows.ts, components/viz/arrow.tsx):
+   the "→" glyph is hidden under a mask of the site's thin arrow, filled with the pink gradient. */
+.pink-arrow {
+  display: inline-block;
+  width: 1.1em;
+  height: 0.7em;
+  margin: 0 0.12em;
+  vertical-align: 0.02em;
+  overflow: hidden;
+  color: transparent;
+  background: linear-gradient(90deg, #f4adff, #ea00ff);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 14' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 7h18M14.5 2l5 5-5 5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 14' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 7h18M14.5 2l5 5-5 5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Distributed-systems visualizations (components/viz/distributed.tsx) */
+.id-chip {
+  min-width: 28px;
+  padding: 2px 7px;
+  border: 1px solid #f0abfc;
+  border-radius: 6px;
+  background: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+  color: #111827;
+  animation: op-tick 0.35s ease-out both;
+}
+.id-chip.is-clash { border-color: #fda4af; background: #fff1f2; color: #e11d48; }
+
+/* ID space: each cell is tinted for its owner; it fills solid once that owner issues it */
+.id-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border: 1px dashed #e5e7eb;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #c4c7cc;
+  transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.id-cell.is-filled { border-style: solid; transform: scale(1.04); }
+.id-owner-0.is-filled { background: linear-gradient(180deg, #f4adff, #ea00ff); border-color: transparent; color: #fff; }
+.id-owner-1.is-filled { background: #fdf4ff; border-color: #f0abfc; color: #a21caf; }
+.id-owner-2.is-filled { background: #f3f4f6; border-color: #d1d5db; color: #111827; }
+.id-key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid; }
+
+/* Race diagram rows fade in one at a time */
+.race-row { opacity: 0; transform: translateY(-3px); transition: opacity 300ms ease, transform 300ms ease; }
+.race-row.is-on { opacity: 1; transform: none; }
+.race-act {
+  padding: 2px 8px;
+  border: 1px solid #f0abfc;
+  border-radius: 6px;
+  background: #fff;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #111827;
+}
+.race-clash {
+  padding: 2px 10px;
+  border: 1px solid #fda4af;
+  border-radius: 9999px;
+  background: #fff1f2;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #e11d48;
+}
+
+/* Authority hub: round trips on every wire; when the hub is down they stop */
+.hub-wire { position: relative; display: block; height: 1px; background: #e5e7eb; }
+.hub-wire i {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #ea00ff;
+  opacity: 0;
+  animation: cb-right 2.6s linear infinite;
+}
+.hub-wire i:nth-child(2) { background: #9ca3af; animation-name: cb-left; }
+.hub-node { border-color: #f0abfc; transition: border-color 300ms ease, opacity 300ms ease; }
+.hub-down { opacity: 0; transition: opacity 300ms ease; }
+.hub.is-down .hub-wire i { animation: none; opacity: 0; }
+.hub.is-down .hub-wire { background: repeating-linear-gradient(90deg, #e5e7eb 0 4px, transparent 4px 8px); }
+.hub.is-down .hub-node { border-color: #fda4af; border-style: dashed; }
+.hub.is-down .hub-down { opacity: 1; }
+
+/* Snowflake layout */
+.sf-field + .sf-field { border-left: 1px solid #fff; }
+.sf-unused { background: #f3f4f6; }
+.sf-time { background: linear-gradient(90deg, #f4adff, #ea00ff); color: #fff; }
+.sf-worker { background: #111827; color: #fff; }
+.sf-seq { background: #fdf4ff; color: #a21caf; }
+.sf-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.sf-key.sf-seq { box-shadow: inset 0 0 0 1px #f0abfc; }
+.sf-bits-unused { color: #c4c7cc; }
+.sf-bits-time { color: #c026d3; }
+.sf-bits-worker { color: #111827; }
+.sf-bits-seq { color: #a21caf; background: #fdf4ff; }
+
+/* Per-ID vs per-boot coordination */
+.tick { display: inline-block; width: 10px; height: 10px; border-radius: 9999px; opacity: 0; transform: scale(0.4); transition: opacity 300ms ease, transform 300ms ease; }
+[data-inview] .tick, .tick.is-key { opacity: 1; transform: none; }
+.tick-net { background: linear-gradient(180deg, #f4adff, #ea00ff); }
+.tick-local { background: #e5e7eb; }
+
+/* Clock jump */
+.cj-label { font-family: var(--font-mono); font-size: 9px; fill: #9ca3af; }
+.cj-issued { stroke-dasharray: 1; animation: cj-draw 5s ease-in-out infinite; }
+@keyframes cj-draw {
+  0% { stroke-dashoffset: 1; }
+  70%, 92% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-chip, .hub-wire i, .cj-issued { animation: none !important; }
+  .id-cell, .race-row, .tick { transition: none; }
+}

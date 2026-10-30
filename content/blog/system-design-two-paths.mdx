@@ -1,0 +1,317 @@
+---
+title: "Every System Design Is Two Paths and One Weak Spot"
+date: "2026-10-30"
+description: "Stop memorizing how YouTube, Twitter and URL shorteners are designed. From first principles, almost every app is a read path, a write path, and one component that breaks first. Find that component and the design follows."
+---
+
+If you prepare for system design interviews the way most people do, you end up with a folder of diagrams. One for YouTube, one for Twitter, one for a URL shortener, one for a news feed. Each one looks like its own architecture, so you try to memorize each one.
+
+I did that for a while, and it didn't stick. Then I tried something else. I stripped every one of those designs down to what has to be true for it to work, and they started looking almost the same.
+
+Most applications have two paths. There's a **read path**, where someone asks for data, and a **write path**, where someone changes it. And every component on those paths has a limit. Once you see that, the whole design comes down to one question: **which component on which path breaks first, under what conditions, and how do you protect it?**
+
+The interview format itself follows this, if you squint:
+
+> Requirements → Estimate → API + Data → Design → Deep dives
+
+Requirements tell you whether the app reads more or writes more. Estimates tell you which component hits its limit. The API and data model are the two paths. The design is those paths drawn out, and the deep dive is the component that's going to suffer.
+
+This post builds both paths from a single server, one problem at a time. For every piece I'll cover what it is, why you need it, how it works, and where it breaks, with one everyday analogy and one real app for each.
+
+---
+
+## Step 1: One server
+
+### What
+
+A client talks to a server. The server does some work and stores the result in a database. When the client asks for it later, the server reads it back.
+
+<Viz label="Step 1 · the whole app" caption="Every app starts here, and a lot of them never need to leave.">
+  <ArchDiagram className="" stages={[
+    { kind: "ui", title: "Client", detail: "Browser or phone app" },
+    { kind: "process", title: "Server", detail: "Runs your code" },
+    { kind: "store", title: "Database", detail: "Keeps the data", tool: "PostgreSQL" },
+  ]} />
+</Viz>
+
+### Why it's enough (for a while)
+
+This is honestly most side projects, and plenty of real businesses too. If you have a few hundred users, one server and one database is the right design, and anything more is cost you don't need yet.
+
+**Everyday version:** a small chai stall with one person making tea. It works perfectly until the office next door lets out for lunch.
+
+### Where it breaks
+
+A single machine has a physical ceiling. It has only so many CPU cores, so much memory, and so many connections it can hold open. When traffic goes past that, requests start waiting, then timing out. Making the machine bigger (vertical scaling) buys time, but bigger machines get expensive fast and there's always a biggest one.
+
+---
+
+## Step 2: More servers, and a load balancer
+
+### What
+
+Run several copies of the same server, and put a **load balancer** in front of them. Clients only ever talk to the load balancer, and it decides which copy handles each request.
+
+### Why
+
+If one server can handle a certain amount of traffic, three copies can handle roughly three times that, and you can add more as you grow. It also means one server crashing no longer takes the whole app down, because the load balancer stops sending it traffic.
+
+### How
+
+The load balancer spreads requests across the servers using a simple rule, like taking turns (round robin) or picking the server with the fewest open connections. It also health-checks each server and pulls the dead ones out of rotation.
+
+**Everyday version:** a bank with five counters and one person at the door handing out tokens, so nobody walks up to a counter that already has a crowd. **Real app:** almost every web app you use sits behind something like nginx or a cloud load balancer.
+
+### Where it breaks: the servers must be stateless
+
+This is the catch, and it took me a while to really get it. If server A keeps your login session in its own memory, and your next request lands on server B, server B has no idea who you are. You get logged out at random.
+
+So the servers have to be stateless. Anything that has to survive between requests, like sessions, carts or half-finished uploads, lives somewhere shared, like the database or a cache, and every server reads it from there. Any copy can then handle any request, and that's what makes adding copies safe.
+
+In the bank, it's like this: if the teller at counter 2 keeps your file in their own drawer, counter 4 can't help you. The fix is a shared filing cabinet that every counter can open.
+
+Statelessness is fairly common now, so you get it almost for free with most frameworks. But it's the assumption the whole load balancer idea rests on.
+
+---
+
+## Step 3: The database is the new bottleneck, so add a cache
+
+### What
+
+Now you have many servers, but they all talk to one database. You moved the bottleneck, which is what fixing a bottleneck usually does. The fix is a **cache**: a fast in-memory store (Redis is the common one) that sits in front of the database and keeps copies of the data people ask for most.
+
+### Why
+
+Databases have a limit too, and they hit it hardest on spiky days. Think of a big sale. Thousands of people open the same product page within the same minute, and every one of those requests runs the same query against the same rows. A cache answers that from memory, so the database only sees the first request instead of all of them.
+
+### How
+
+The usual pattern is **cache-aside**. The server checks the cache first. If the data is there (a hit), it returns it straight away. If it isn't (a miss), it reads from the database, stores a copy in the cache, and then returns it. The next person gets the hit.
+
+**Everyday version:** a library keeps the five most borrowed books at the front desk instead of walking to the back shelves every time someone asks. **Real app:** the product page on a sale day, or your profile picture, which gets read millions of times and almost never changes.
+
+### Where it breaks
+
+A cache holds a copy, and copies go stale. If a price changes in the database and the cache still holds the old one, people see the old price until that cache entry expires or gets cleared. Deciding when to clear it (cache invalidation) is a famously annoying problem. A cache can also start empty after a restart, and then every request misses at once and lands on the database together. That's exactly the spike the cache was supposed to absorb.
+
+Even with those caveats, a cache in front of the database solves most read-heavy problems most of the time.
+
+---
+
+## Step 4: Too much data, so split the database
+
+### What
+
+At some point you have so much data, or so many customers (tenants), that one database can't hold it all or can't keep up with it. So you split it into **shards**. Each shard is a separate database that holds one slice of the data.
+
+### How
+
+You pick a **shard key** and use it to decide where every row lives. For a SaaS app, the tenant ID is a natural one, so each customer's data sits together on one shard. For a social app it might be the user ID.
+
+**Everyday version:** a school stops keeping every student record in one cabinet and splits them by roll number, 1 to 500 in one room and 501 to 1000 in the next. **Real app:** a multi-tenant SaaS product where each big customer's data lives on its own shard.
+
+### Where it breaks
+
+A bad shard key gives you a hot shard. If one tenant is far bigger than the rest, or one celebrity account gets most of the traffic, the shard holding them is overloaded while the others sit idle. Queries that need data from many shards get slow and complicated. And moving data around when you add shards later is real work. I'm not going deeper on sharding in this post, but it's worth knowing it exists, and that it comes after caching, not before.
+
+---
+
+## Step 5: Reads far outnumber writes, so add read replicas
+
+### What
+
+Some apps are skewed. A URL shortener is the classic example: a link is created once and then clicked over and over. For an app like that, almost all the load is reads. So you keep one primary database that accepts all the writes, and several **read replicas** that hold copies of it and answer the reads.
+
+### Why
+
+Writes go to one place, so there's no confusion about which copy is correct. Reads spread across as many replicas as you need, so the read side can grow without touching the write side.
+
+**Everyday version:** one original document is kept in the manager's office, and the photocopies go out to every desk. Everyone reads a copy, but changes are only ever made to the original. **Real app:** the URL shortener, a blog, a product catalogue. All of these get read far more often than they're written.
+
+### Where it breaks
+
+Copying takes time. A replica can be a little behind the primary, so you might write something and then not see it for a moment when you read from a replica. That's replication lag. It's its own topic, so I'm leaving it for another post. Just know that the moment you add replicas, "the data I just wrote" and "the data I just read" can disagree for a moment.
+
+---
+
+## The read path, put together
+
+Strip all of that down, and here's the read path for most applications:
+
+<Viz label="The read path" caption="Most read requests stop at the cache. Only the misses reach a replica.">
+  <ArchDiagram className="" stages={[
+    { kind: "ui", title: "Client", detail: "Asks for data" },
+    { kind: "api", title: "Load balancer", detail: "Picks a free server" },
+    { kind: "process", title: "Server", detail: "Stateless, any copy works" },
+    { kind: "store", title: "Cache", detail: "Checked first", branch: "hit → return it" },
+    { kind: "store", title: "Read replica", detail: "Only on a miss", branch: "→ fill the cache on the way back", tool: "PostgreSQL" },
+  ]} />
+</Viz>
+
+The client hits the load balancer, which routes it to a server. The server checks the cache. If it's a hit, the request is done. If it's a miss, the server goes to a read replica, puts the answer in the cache, and returns it.
+
+That's it. Shards and replicas change *where* the database part lives, but the shape stays the same.
+
+---
+
+## The write path
+
+### What
+
+A write comes in through the same load balancer to a server. For simple writes, the server can just write to the primary database and be done. But some writes come with heavy work attached: resizing an image, transcoding a video, sending a thousand notifications, generating a report. If the server does that work inline, it's stuck on one request for seconds while everything else waits behind it.
+
+So the server doesn't do the heavy work itself. It puts a job on a **queue** and immediately answers "accepted" (HTTP 202, or just a "processing" status). Separate **workers** pull jobs off the queue and do the work at their own pace.
+
+### Why
+
+Picture a ticket counter when a train is about to leave. If everyone pushes to the window at once, the person behind it gets overwhelmed, people get missed, and some of them give up and leave. Put a line in front of the same window and the clerk serves one person at a time, at the speed they can actually work. Nobody gets lost, and the crowd just takes a bit longer to clear.
+
+A queue does exactly that for your servers. A sudden burst of requests doesn't crash anything. It just makes the line longer for a while.
+
+<Viz label="Ticket counter · push vs. line" caption="The same burst, twice. With no queue, anything over capacity is lost. With a queue, it waits its turn and the work finishes a few ticks later.">
+  <BurstQueue arrivals={[1, 2, 6, 7, 5, 2, 1, 0]} capacity={3} />
+</Viz>
+
+There's a second benefit, and it's the one I like most: the app feels faster. The moment the job is on the queue, the user gets a response and can carry on. Nobody stares at a spinner while a video transcodes.
+
+### How
+
+The whole write path looks like this:
+
+<Viz label="The write path" caption="The server answers right away. The heavy work happens behind the queue, at the workers' pace.">
+  <ArchDiagram className="" stages={[
+    { kind: "ui", title: "Client", detail: "Sends a change" },
+    { kind: "api", title: "Load balancer", detail: "Picks a free server" },
+    { kind: "process", title: "Server", detail: "Validates, enqueues", branch: "→ 202 Accepted" },
+    { kind: "source", title: "Queue", detail: "Holds jobs in order", tool: "Kafka" },
+    { kind: "process", title: "Worker", detail: "Does the heavy work" },
+    { kind: "store", title: "Primary DB", detail: "Result written once", branch: "→ update or clear the cache", tool: "PostgreSQL" },
+  ]} />
+</Viz>
+
+The worker does its job, writes the result to the primary database, and then either updates the cache entry or deletes it so the next read fetches the fresh version.
+
+**Real app:** when you upload a video to YouTube, it says "processing" and lets you keep going. Your upload is sitting in a queue, and workers are turning it into all the different resolutions in the background.
+
+### Where it breaks
+
+A queue absorbs bursts, but it can't fix a system that's slower than its traffic all the time. If jobs arrive faster than workers finish them for hours, the line just grows forever, and you need more workers. Many queues also deliver a job at least once, which means a worker can occasionally get the same job twice, so the work has to be safe to repeat (idempotent). And because the result shows up later, the user sees "processing" for a while. For a video that's fine. For a bank transfer, you need to think much harder.
+
+---
+
+## The pattern
+
+If I had to fit the whole thing on a sticky note, it would say:
+
+> **Writes go to a queue. Reads come from a cache. Workers do the work.**
+
+And under that, the one rule that explains why each of those pieces exists:
+
+> **Every component either gets overwhelmed or hits a physical limit.**
+
+Each piece we added was the answer to the previous piece hitting its limit. One server hit its limit, so we added copies and a load balancer. The database hit its limit, so we added a cache. Heavy writes overwhelmed the servers, so we added a queue. Watch the bottleneck move:
+
+<Viz label="Follow the bottleneck" caption="Illustrative numbers. Each fix pushes the weak spot somewhere else. Click a stage to pin it.">
+  <BottleneckWalk stages={[
+    { title: "One server", note: "The server runs out of CPU and connections first. The database is fine.", load: [
+      { name: "Server(s)", value: 140 },
+      { name: "Database", value: 45 },
+    ] },
+    { title: "+ load balancer", note: "Three stateless servers share the load. Now every one of them hits the same database.", load: [
+      { name: "Load balancer", value: 15 },
+      { name: "Server(s)", value: 47 },
+      { name: "Database", value: 125 },
+    ] },
+    { title: "+ cache", note: "Most reads stop at the cache. The database only sees misses and writes.", load: [
+      { name: "Load balancer", value: 15 },
+      { name: "Server(s)", value: 47 },
+      { name: "Cache", value: 40 },
+      { name: "Database", value: 35 },
+    ] },
+    { title: "Sale day", note: "Heavy writes arrive in a burst. Servers doing that work inline fall over, and so does the database behind them.", load: [
+      { name: "Load balancer", value: 30 },
+      { name: "Server(s)", value: 110 },
+      { name: "Cache", value: 60 },
+      { name: "Database", value: 115 },
+    ] },
+    { title: "+ queue + workers", note: "Servers just enqueue and answer. Workers drain the queue at a pace the database can take.", load: [
+      { name: "Load balancer", value: 30 },
+      { name: "Server(s)", value: 45 },
+      { name: "Queue", value: 50 },
+      { name: "Workers", value: 85 },
+      { name: "Cache", value: 60 },
+      { name: "Database", value: 70 },
+    ] },
+  ]} />
+</Viz>
+
+This is also how I now think about the advanced topics. Concurrency control, replication, streaming and transactions all sound like separate subjects, but they exist to solve exactly these problems. Two writers touching the same row at once, a copy falling behind, a queue that has to keep events in order, a write that has to fully succeed or fully fail. They're deeper answers to "this component is about to break."
+
+So for any new application, the job is to figure out which component is going to suffer most, under what condition, and build a strong foundation around that one. The rest of the design is the two paths you already know.
+
+---
+
+## Now apply it
+
+Here's where it clicked for me. Take any "design X" question, draw the two paths, ask which component breaks first, and the famous architecture mostly falls out on its own. What's left are what I call **plug-ins**: add-ons that solve one specific limit, usually latency or cost, that a plain database or server handles badly.
+
+<Viz label="Same two paths, different weak spot">
+  <MismatchTable
+    headers={["App", "What breaks first", "The plug-in"]}
+    rows={[
+      { wrote: "URL shortener", actual: "the read path", result: "Links are created once and clicked many times. Cache plus read replicas carry almost all of it." },
+      { wrote: "YouTube", actual: "huge files, far-away viewers", result: "Object storage for the video files, a CDN to serve them close to viewers, a queue and workers to transcode uploads." },
+      { wrote: "News feed", actual: "building each feed on read", result: "Workers precompute every user's feed on write and keep it in a cache, so opening the app is one read." },
+      { wrote: "Text search", actual: "the database itself", result: "A search index built for matching words, kept up to date by workers on the write path." },
+    ]}
+  />
+</Viz>
+
+### URL shortener
+
+Requirements first: people create a short link once and then click it many, many times. That skew tells you right away that the read path is where all the pressure is. So you lean on the cache, since popular links are tiny and read constantly, and on read replicas behind it.
+
+The write path is small, but it has one interesting problem: making sure every short code is unique when several servers are creating them at the same time. I worked through that exact problem in [How Two Servers Can Count Without Talking to Each Other](/blog/two-servers-count-without-talking).
+
+### YouTube
+
+A database is a bad place to keep video files. They're huge, and a database is built for lots of small rows, not giant blobs. So the files go into **object storage** (like S3), and the database just keeps the metadata and where the file lives. Viewers are all over the world, and streaming every byte from one region would be slow and expensive, so a **CDN** keeps copies of popular videos on servers close to the viewers. And uploads go through the write path you just saw: queue, workers, "processing".
+
+Take away the video-specific plug-ins and YouTube is a read path and a write path.
+
+### News feed and social media
+
+The naive version builds your feed when you open the app: find everyone you follow, fetch their recent posts, merge and sort them. That's a lot of reads for every single feed open, and feeds are opened constantly. So the weak spot is the read path again, just in a more expensive shape.
+
+The usual fix moves the work to the write path. When someone posts, a job goes on the queue, and workers add that post to each follower's precomputed feed in the cache. Opening the app is then a single cache read. It breaks on accounts with millions of followers, where one post becomes millions of jobs, so big accounts are often handled differently and merged in at read time. But the shape is still: writes to a queue, workers do the work, reads come from a cache.
+
+### Text search
+
+Searching for a word inside millions of rows with a plain database query means scanning a lot of text, which is slow. A **search index** (Elasticsearch and OpenSearch are the common ones) is built to answer "which documents contain these words" quickly. Workers on the write path keep it updated whenever the data changes, and the read path for search goes to the index instead of the database.
+
+---
+
+## Where this way of thinking breaks
+
+I don't want to oversell it. Two paths and a weak spot gets you most of the way for most applications, but a few kinds of systems push back on it.
+
+- **Money and anything that must be exact.** "Accepted, processing" plus a cache that might be a little stale is fine for a video, and not fine for a bank balance. There, transactions and consistency come first, and you give up some of the speed tricks on purpose.
+- **Real-time apps.** Chat, multiplayer games and live dashboards keep connections open and push data to the client, which is a different shape from request and response.
+- **Data-heavy pipelines.** Analytics and ML pipelines are mostly one giant write path with streaming in the middle, and the read side looks very different.
+
+Even then, I find the same question still works: which component breaks first, and what protects it?
+
+---
+
+## The whole thing in one line
+
+> one server → copies behind a load balancer → a cache in front of the database → shards and replicas when the data outgrows one machine → a queue and workers for heavy writes → plug-ins for the one limit your app hits hardest
+
+What I take from this:
+
+- **Draw the two paths before you reach for a memorized design.** Once the read path and the write path are on the page, most of the design is already there.
+- **Every component has a limit.** Your job is to find which one you hit first, and under what conditions: a sale day, a viral post, a celebrity account.
+- **Writes go to a queue, reads come from a cache, workers do the work.** That one pattern covers a surprising number of systems.
+- **Plug-ins solve one limit each.** CDN and object storage for big files, a search index for text, precomputed feeds for fan-out. Add them when the limit shows up, not before.
+
+So the next time you get "design Twitter" or "design YouTube", draw the two paths first, then go looking for the thing that's going to break. The diagram you were about to memorize usually shows up on its own.

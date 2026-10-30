@@ -848,3 +848,24 @@ body {
   .cyc-node, .cm-seg { transition: none; }
   .ev-chip, .lr-summary { animation: none; }
 }
+
+/* System-design visualizations (components/viz/systems.tsx) */
+.bq-col { opacity: 0; transform: translateY(4px); transition: opacity 250ms ease, transform 250ms ease; }
+.bq-col.is-on { opacity: 1; transform: none; }
+.bq-unit { display: block; height: 7px; border-radius: 2px; }
+.bq-unit.is-key { display: inline-block; width: 10px; }
+.bq-served, .bq-done { background: linear-gradient(180deg, #f4adff, #ea00ff); }
+.bq-waiting { background: #fdf4ff; box-shadow: inset 0 0 0 1px #f0abfc; }
+.bq-dropped { background: #fff1f2; box-shadow: inset 0 0 0 1px #fda4af; }
+.bw-step { border-color: #ececed; background: #fff; color: #6b7280; transition: border-color 200ms ease, color 200ms ease, background-color 200ms ease; }
+.bw-step:hover { color: #111827; }
+.bw-step.is-on { border-color: #f0abfc; background: #fdf4ff; color: #a21caf; }
+.bw-bar { background: #d1d5db; transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms ease; }
+.bw-bar.is-hi { background: linear-gradient(90deg, #f4adff, #ea00ff); }
+.bw-bar.is-over { background: #fb7185; }
+.bw-note { animation: exp-open 400ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bq-col, .bw-bar { transition: none; }
+  .bw-note { animation: none !important; }
+}

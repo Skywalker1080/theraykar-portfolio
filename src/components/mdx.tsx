@@ -5,6 +5,7 @@ import { Viz } from "@/components/viz/frame";
 import { Bars, DotGrid, MismatchTable, RetryTimeline, Deadlines } from "@/components/viz/charts";
 import { CheckStack, GrowingFile, Ratchet } from "@/components/viz/animated";
 import { ContractBoundary, FilterVsBoundary } from "@/components/viz/diagrams";
+import { BurstQueue, BottleneckWalk } from "@/components/viz/systems";
 import { CycleDiagram, Transcript, EventStream, FanOut, LogRebuild, ContextMeter } from "@/components/viz/agent";
 import { IdStreams, IdSpace, RaceDiagram, AuthorityHub, LiveSnowflake, TickRows, ClockJump } from "@/components/viz/distributed";
 
@@ -36,6 +37,8 @@ export const mdxComponents = {
   FanOut,
   LogRebuild,
   ContextMeter,
+  BurstQueue,
+  BottleneckWalk,
   h1: (props: React.ComponentProps<"h1">) => (
     <h1
       className="mt-10 mb-4 text-[28px] font-bold leading-[1.25] tracking-[-0.02em] text-[#111827]"

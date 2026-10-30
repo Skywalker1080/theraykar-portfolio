@@ -138,14 +138,8 @@ Copying takes time. A replica can be a little behind the primary, so you might w
 
 Strip all of that down, and here's the read path for most applications:
 
-<Viz label="The read path" caption="Most read requests stop at the cache. Only the misses reach a replica.">
-  <ArchDiagram className="" stages={[
-    { kind: "ui", title: "Client", detail: "Asks for data" },
-    { kind: "api", title: "Load balancer", detail: "Picks a free server" },
-    { kind: "process", title: "Server", detail: "Stateless, any copy works" },
-    { kind: "store", title: "Cache", detail: "Checked first", branch: "hit → return it" },
-    { kind: "store", title: "Read replica", detail: "Only on a miss", branch: "→ fill the cache on the way back", tool: "PostgreSQL" },
-  ]} />
+<Viz label="The read path" caption="Pink is the read path. Most requests stop at the cache, and only a miss reaches a read replica. Click any step to pin it.">
+  <TwoPaths initial="read" />
 </Viz>
 
 The client hits the load balancer, which routes it to a server. The server checks the cache. If it's a hit, the request is done. If it's a miss, the server goes to a read replica, puts the answer in the cache, and returns it.
@@ -178,15 +172,8 @@ There's a second benefit, and it's the one I like most: the app feels faster. Th
 
 The whole write path looks like this:
 
-<Viz label="The write path" caption="The server answers right away. The heavy work happens behind the queue, at the workers' pace.">
-  <ArchDiagram className="" stages={[
-    { kind: "ui", title: "Client", detail: "Sends a change" },
-    { kind: "api", title: "Load balancer", detail: "Picks a free server" },
-    { kind: "process", title: "Server", detail: "Validates, enqueues", branch: "→ 202 Accepted" },
-    { kind: "source", title: "Queue", detail: "Holds jobs in order", tool: "Kafka" },
-    { kind: "process", title: "Worker", detail: "Does the heavy work" },
-    { kind: "store", title: "Primary DB", detail: "Result written once", branch: "→ update or clear the cache", tool: "PostgreSQL" },
-  ]} />
+<Viz label="The write path" caption="Indigo is the write path. The server answers right away, and the heavy work happens behind the queue at the workers' pace.">
+  <TwoPaths initial="write" />
 </Viz>
 
 The worker does its job, writes the result to the primary database, and then either updates the cache entry or deletes it so the next read fetches the fresh version.
@@ -204,6 +191,10 @@ A queue absorbs bursts, but it can't fix a system that's slower than its traffic
 If I had to fit the whole thing on a sticky note, it would say:
 
 > **Writes go to a queue. Reads come from a cache. Workers do the work.**
+
+<Viz label="Both paths, one system" caption="The same servers sit on both paths. Reads peel off to the cache, writes peel off to the queue.">
+  <TwoPaths initial="both" />
+</Viz>
 
 And under that, the one rule that explains why each of those pieces exists:
 
